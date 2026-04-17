@@ -1,0 +1,259 @@
+% This LaTeX was auto-generated from MATLAB code.
+% To make changes, update the MATLAB code and export to LaTeX again.
+
+\documentclass{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{graphicx}
+\usepackage{color}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{epstopdf}
+\usepackage[table]{xcolor}
+\usepackage{matlab}
+\usepackage[paperheight=597pt,paperwidth=845pt,top=72pt,bottom=72pt,right=72pt,left=72pt,heightrounded]{geometry}
+
+\sloppy
+\epstopdfsetup{outdir=./}
+\graphicspath{ {./MRA_EWT_000_media/} }
+
+\begin{document}
+
+\label{T_D5D49718}
+\matlabtitle{Data Processing Procedure (DPP)}
+
+\begin{par}
+\begin{flushleft}
+\textbf{Objective: }Hydrogen Deflagration Time-Series Analysis.
+\end{flushleft}
+\end{par}
+
+
+\label{H_0EB04853}
+\matlabheading{\textbf{Procedure Steps}}
+
+
+\label{H_60BC4369}
+\matlabheading{\textbf{Data Acquisition and Import}}
+
+\label{H_E4041D27}
+\matlabheadingtwo{Collect Raw Data}
+
+\begin{par}
+\begin{flushleft}
+Record the pressure data from the deflagration test at a known sampling rate and store all relevant metadata (e.g., test conditions, sensor specifications).
+\end{flushleft}
+\end{par}
+
+\label{H_6A274493}
+\matlabheadingtwo{Import into MATLAB}
+
+\begin{par}
+\begin{flushleft}
+Load the raw time-series data (e.g., using load or CSV import) and verify the correct time alignment, sampling frequency, and units.
+\end{flushleft}
+\end{par}
+
+\label{H_11DBFA0F}
+\matlabheadingtwo{Outcome}
+
+\begin{par}
+\begin{flushleft}
+A raw pressure signal and associated metadata are available in MATLAB.
+\end{flushleft}
+\end{par}
+
+
+\label{H_23C559C1}
+\matlabheading{Matlab Startup File}
+
+\label{H_1B29D089}
+\begin{par}
+\begin{flushleft}
+This m-File code prepare the enviroment to provide access to auxilliary files and sub-folders.
+\end{flushleft}
+\end{par}
+
+\label{H_AA5A5334}
+\matlabheading{Import Signal Data}
+
+\label{H_BB6E8E92}
+\matlabheading{Load "Raw" Signal}
+
+\begin{par}
+\begin{flushleft}
+\textbf{Note: }Details on DAQ system setting are required, to check if any hardware filters has been used.
+\end{flushleft}
+\end{par}
+
+
+
+\vspace{1em}
+\begin{par}
+\begin{flushleft}
+Use ewt to obtain a multiresolution analysis (MRA) of the signal, and the corresponding analysis coefficients. Use the four largest peaks to determine the filter passbands. Plot the signal and the MRA components.
+\end{flushleft}
+\end{par}
+
+\begin{matlaboutput}
+Processing Test 1...
+\end{matlaboutput}
+\begin{center}
+\includegraphics[width=\maxwidth{142.24786753637733em}]{figure_0.pdf}
+\end{center}
+\begin{matlaboutput}
+Processing Test 2...
+\end{matlaboutput}
+\begin{center}
+\includegraphics[width=\maxwidth{142.24786753637733em}]{figure_1.pdf}
+\end{center}
+\begin{matlaboutput}
+Processing Test 3...
+\end{matlaboutput}
+\begin{center}
+\includegraphics[width=\maxwidth{142.24786753637733em}]{figure_2.pdf}
+\end{center}
+\begin{matlaboutput}
+Processing Test 4...
+\end{matlaboutput}
+\begin{center}
+\includegraphics[width=\maxwidth{142.24786753637733em}]{figure_3.pdf}
+\end{center}
+\begin{matlaboutput}
+Processing Test 5...
+\end{matlaboutput}
+\begin{center}
+\includegraphics[width=\maxwidth{142.24786753637733em}]{figure_4.pdf}
+\end{center}
+\begin{matlaboutput}
+Processing Test 6...
+\end{matlaboutput}
+\begin{center}
+\includegraphics[width=\maxwidth{142.24786753637733em}]{figure_5.pdf}
+\end{center}
+\begin{matlaboutput}
+Processing Test 7...
+\end{matlaboutput}
+\begin{center}
+\includegraphics[width=\maxwidth{142.24786753637733em}]{figure_6.pdf}
+\end{center}
+\begin{matlaboutput}
+Processing Test 8...
+\end{matlaboutput}
+\begin{center}
+\includegraphics[width=\maxwidth{142.24786753637733em}]{figure_7.pdf}
+\end{center}
+\begin{matlaboutput}
+Processing Test 9...
+\end{matlaboutput}
+\begin{center}
+\includegraphics[width=\maxwidth{142.24786753637733em}]{figure_8.pdf}
+\end{center}
+\begin{matlaboutput}
+Processing Test 10...
+\end{matlaboutput}
+\begin{center}
+\includegraphics[width=\maxwidth{142.24786753637733em}]{figure_9.pdf}
+\end{center}
+\begin{matlaboutput}
+Processing Test 11...
+\end{matlaboutput}
+\begin{center}
+\includegraphics[width=\maxwidth{142.24786753637733em}]{figure_10.pdf}
+\end{center}
+\begin{matlaboutput}
+Processing Test 12...
+\end{matlaboutput}
+\begin{center}
+\includegraphics[width=\maxwidth{142.24786753637733em}]{figure_11.pdf}
+\end{center}
+\begin{matlaboutput}
+    Test Number    Mode Number    Peak Frequency (Hz)    Passband Start (Hz)    Passband End (Hz)
+    ___________    ___________    ___________________    ___________________    _________________
+
+         1              1               324.89                 299.35                 5e+05      
+         1              2               273.82                 268.14                299.35      
+         1              3               261.05                 252.53                268.14      
+         1              4               244.02                 222.74                252.53      
+         1              5               201.46                      0                222.74      
+         2              1                583.1                 429.88                 5e+05      
+         2              2               314.96                 297.93                429.88      
+         2              3               280.91                 268.14                297.93      
+         2              4               253.95                 148.97                268.14      
+         2              5               86.543                      0                148.97      
+         3              1               588.78                 429.88                 5e+05      
+         3              2               313.54                 280.91                429.88      
+         3              3                249.7                 147.55                280.91      
+         3              4               86.543                 21.281                147.55      
+         3              5               4.2562                      0                21.281      
+         4              1               868.27                 533.44                 5e+05      
+         4              2               326.31                 286.58                533.44      
+         4              3                249.7                 245.44                286.58      
+         4              4               241.19                 212.81                245.44      
+         4              5               187.27                      0                212.81      
+         5              1               299.35                 293.68                 5e+05      
+         5              2                  288                 273.82                293.68      
+         5              3               258.21                 253.95                273.82      
+         5              4               248.28                 224.16                253.95      
+         5              5               201.46                      0                224.16      
+         6              1               588.78                 417.11                 5e+05      
+         6              2                295.1                 276.65                417.11      
+         6              3               256.79                  151.8                276.65      
+         6              4               87.962                 21.281                 151.8      
+         6              5               4.2562                      0                21.281      
+         7              1               459.67                 380.22                 5e+05      
+         7              2               313.54                 292.26                380.22      
+         7              3               270.98                 263.88                292.26      
+         7              4               255.37                 251.12                263.88      
+         7              5               245.44                      0                251.12      
+         8              1                317.8                 306.45                 5e+05      
+         8              2               293.68                 275.23                306.45      
+         8              3               256.79                 225.58                275.23      
+         8              4                197.2                   22.7                225.58      
+         8              5               1.4187                      0                  22.7      
+         9              1                295.1                 286.58                 5e+05      
+         9              2               278.07                 270.98                286.58      
+         9              3               262.47                  151.8                270.98      
+         9              4               86.543                 15.606                 151.8      
+         9              5               1.4187                      0                15.606      
+        10              1               587.36                 581.68                 5e+05      
+        10              2               574.59                 402.92                581.68      
+        10              3               280.91                 276.65                402.92      
+        10              4               270.98                 261.05                276.65      
+        10              5               251.12                      0                261.05      
+        11              1               591.61                 404.34                 5e+05      
+        11              2               275.23                 263.88                404.34      
+        11              3               252.53                 148.97                263.88      
+        11              4               86.543                 21.281                148.97      
+        11              5               4.2562                      0                21.281      
+        12              1                317.8                 297.93                 5e+05      
+        12              2               278.07                 269.56                297.93      
+        12              3               259.63                  151.8                269.56      
+        12              4               87.962                 42.562                 151.8      
+        12              5               19.862                      0                42.562      
+\end{matlaboutput}
+\begin{matlaboutput}
+EWT analysis completed for selected tests.
+\end{matlaboutput}
+\begin{par}
+\begin{flushleft}
+Plot the magnitude spectrum of the signal, and the filter bank. The locations of the peaks determine the filter passbands.
+\end{flushleft}
+\end{par}
+
+\begin{par}
+\begin{flushleft}
+Verify that summing the MRA components results in perfect reconstruction of the signal.
+\end{flushleft}
+\end{par}
+
+\begin{par}
+\begin{flushleft}
+Verify energy preservation of the EWT analysis coefficients.
+\end{flushleft}
+\end{par}
+
+\end{document}

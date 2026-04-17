@@ -2,4 +2,20 @@
 .vscode/*
 .vscode
 .codex
-1-Ge
+1-General Plan
+2-Data
+4-CAD-Files
+5-Simulations-Files
+6-Results
+7-Reports_and_Presentations
+8-Pictures
+9-Diagrams
+10-Material-Books-Standards
+
+# System files
+PIF_004.m
+resources
+VH2DDataAnalysis.prj
+.DS_Store
+Thumbs.db
+
