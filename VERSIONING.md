@@ -51,7 +51,8 @@ git commit -m "Files Setup"
 git push origin main
 git tag -a v0.0.0 -m "v0.0.0"
 git push origin v0.0.0
-git log -1 --stat
+git --no-pager log -1 --stat
+
 ```
 
 ## Useful Commands
