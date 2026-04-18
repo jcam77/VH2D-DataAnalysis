@@ -19,10 +19,8 @@ addpath(auxDir);
 L = 0.9; % Length (L)
 W = 0.9; % Width (W)
 H = 0.9; % Height (H)
-V_chamber_m3 = L * W * H; 
-Vol_Pipes = 0; % pipes added free volume [m^3]
-WeldedParts = 0;% Welded Parts substracted volume [m^3]
-V_chamberCorrected_m3 = V_chamber_m3 + Vol_Pipes - WeldedParts;                    % chamber free volume [m^3]
+Vol_Pipes = 0;                                       % pipes added free volume [m^3]
+V_chamber_m3 = L * W * H + Vol_Pipes;                    % chamber free volume [m^3]
 
 T_local_K = [292.95 293.25 293.55 293.15 294.35 294.15 293.85 294.05]; ...
     % per-test gas temperature [K]
@@ -35,19 +33,17 @@ P0_Pa = 101325;                          % initial chamber pressure [Pa], sealed
 
 T_std_K = 298.15;                        % Alicat default standard temperature [K]
 P_std_Pa = 101325;                       % standard absolute pressure [Pa]
-MFC_capacity_SLPM = 50.0;                % MFC full-scale capacity [SLPM]
-Alicat_setpoint_SLPM = 35.0;             % practical operating setpoint [SLPM]
-MFC_setpoint_std_m3_s = Alicat_setpoint_SLPM * 1e-3 / 60; ...
-    % standardized MFC setpoint [m^3/s]
+MFC_setpoint_std_m3_s = NaN;             % standardized MFC setpoint [m^3/s], use NaN to skip fill time
 
-fprintf('Using %.1f SLPM on a %.1f SLM Alicat (%.1f%% of full scale).\n', ...
-    Alicat_setpoint_SLPM, MFC_capacity_SLPM, 100 * Alicat_setpoint_SLPM / MFC_capacity_SLPM);
+% If you have an Alicat setpoint in SLPM, convert it before calling:
+% Alicat_setpoint_SLPM = 10.0;
+% MFC_setpoint_std_m3_s = Alicat_setpoint_SLPM * 1e-3 / 60;
 
 makePlot = true;                         % true to generate the mass plot
 
 %% Run Calculator
 Results = AuxFcn_H2_MFC_FillCalculator_000( ...
-    V_chamberCorrected_m3, ...
+    V_chamber_m3, ...
     T_local_K, ...
     P_final_Pa, ...
     H2_volPct, ...
@@ -96,25 +92,19 @@ if all(isfinite(Results.inputs.MFC_setpoint_std_m3_s)) && all(Results.inputs.MFC
         && numel(unique(Results.inputs.MFC_setpoint_std_m3_s)) == 1
     fprintf('  MFC setpoint        : %.6e m^3/s at standard conditions (shared)\n', ...
         Results.inputs.MFC_setpoint_std_m3_s(1));
-    fprintf('  MFC setpoint        : %.2f SLPM (shared)\n', Results.MFC_setpoint_SLPM(1));
 elseif all(~isfinite(Results.inputs.MFC_setpoint_std_m3_s) | Results.inputs.MFC_setpoint_std_m3_s <= 0)
     fprintf('\nFill time not calculated because MFC_setpoint_std_m3_s is NaN or <= 0.\n');
 else
     fprintf('  MFC setpoint        : row-specific values used where available\n');
 end
 
-if all(isfinite(Results.InjectionTime_s))
-    fprintf('  Estimated injection time range : %.2f s to %.2f s\n', ...
-        min(Results.InjectionTime_s), max(Results.InjectionTime_s));
-end
-
 %% Example for Multiple Tests
 % testTemperatures_K = [291.65 294.15 297.15];
 % for iTest = 1:numel(testTemperatures_K)
 %     testResult = AuxFcn_H2_MFC_FillCalculator_000( ...
-%         V_chamberCorrected_m3, testTemperatures_K(iTest), P_final_Pa(iTest), ...
+%         V_chamber_m3, testTemperatures_K(iTest), P_final_Pa(iTest), ...
 %         18, fillMode, P0_Pa, T_std_K, P_std_Pa, ...
 %         MFC_setpoint_std_m3_s, false);
-%     fprintf('Test %d -> T = %.2f K, required H2 = %.6f kg, estimated injection time = %.2f s\n', ...
-%         iTest, testTemperatures_K(iTest), testResult.m_H2_kg, testResult.InjectionTime_s);
+%     fprintf('Test %d -> T = %.2f K, required H2 = %.6f kg\n', ...
+%         iTest, testTemperatures_K(iTest), testResult.m_H2_kg);
 % end
