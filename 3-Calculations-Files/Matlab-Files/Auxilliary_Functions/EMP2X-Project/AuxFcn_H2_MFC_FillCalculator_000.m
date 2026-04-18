@@ -1,42 +1,36 @@
-function Results = AuxFcn_H2_MFC_FillCalculator_000(V_chamber_m3, T_local_K, P_final_Pa, H2_volPct, fillMode, P0_Pa, T_std_K, P_std_Pa, MFC_setpoint_std_m3_s, makePlot)
+function Results = AuxFcn_H2_MFC_FillCalculator_000(V_chamber_m3, T_chamber_K, P_chamber_Pa, H2_volPct, T_std_K, P_std_Pa, MFC_setpoint_SLPM, makePlot)
 % AuxFcn_H2_MFC_FillCalculator_000
 % Estimate the hydrogen amount required to reach target chamber
-% concentrations and, optionally, estimate filling time from the Alicat MFC
-% setpoint expressed in standardized cubic meters per second.
+% concentrations during vented filling and, optionally, estimate injection
+% time from the Alicat MFC setpoint expressed in standardized cubic meters
+% per second.
 %
 % Inputs
 %   V_chamber_m3          chamber free volume [m^3], scalar or per-test vector
-%   T_local_K             local gas temperature [K], scalar or per-test vector
-%   P_final_Pa            final absolute pressure [Pa], scalar or per-test vector
+%   T_chamber_K           chamber gas temperature [K], scalar or per-test vector
+%   P_chamber_Pa          chamber absolute pressure [Pa], scalar or per-test vector
 %   H2_volPct             target hydrogen concentration(s) [vol%]
-%   fillMode              "vented" or "sealed"
-%   P0_Pa                 initial chamber pressure [Pa], scalar or per-test vector
 %   T_std_K               standard temperature [K]
 %   P_std_Pa              standard absolute pressure [Pa]
-%   MFC_setpoint_std_m3_s MFC setpoint [m^3/s at standard conditions], scalar
-%                         or per-test vector, use NaN to skip fill time
+%   MFC_setpoint_SLPM     Alicat setpoint [SLPM], scalar or per-test vector,
+%                         use NaN to skip injection time
 %   makePlot              logical flag, true to generate a plot
 %
+
 % Output
 %   Results               struct with inputs, vectors, and optional table
 
-if nargin < 10 || isempty(makePlot)
+if nargin < 8 || isempty(makePlot)
     makePlot = true;
 end
-if nargin < 9 || isempty(MFC_setpoint_std_m3_s)
-    MFC_setpoint_std_m3_s = NaN;
+if nargin < 7 || isempty(MFC_setpoint_SLPM)
+    MFC_setpoint_SLPM = NaN;
 end
-if nargin < 8 || isempty(P_std_Pa)
+if nargin < 6 || isempty(P_std_Pa)
     P_std_Pa = 101325;
 end
-if nargin < 7 || isempty(T_std_K)
+if nargin < 5 || isempty(T_std_K)
     T_std_K = 298.15;
-end
-if nargin < 6 || isempty(P0_Pa)
-    P0_Pa = 101325;
-end
-if nargin < 5 || isempty(fillMode)
-    fillMode = 'vented';
 end
 
 Ru = 8.314462618;                        % universal gas constant [J/(mol*K)]
@@ -46,41 +40,31 @@ H2_volPct = H2_volPct(:);
 nCases = numel(H2_volPct);
 
 V_chamber_m3 = i_expandToCases(V_chamber_m3, nCases, 'V_chamber_m3');
-T_local_K = i_expandToCases(T_local_K, nCases, 'T_local_K');
-P_final_Pa = i_expandToCases(P_final_Pa, nCases, 'P_final_Pa');
-P0_Pa = i_expandToCases(P0_Pa, nCases, 'P0_Pa');
-MFC_setpoint_std_m3_s = i_expandToCases(MFC_setpoint_std_m3_s, nCases, 'MFC_setpoint_std_m3_s');
+T_chamber_K = i_expandToCases(T_chamber_K, nCases, 'T_chamber_K');
+P_chamber_Pa = i_expandToCases(P_chamber_Pa, nCases, 'P_chamber_Pa');
+MFC_setpoint_SLPM = i_expandToCases(MFC_setpoint_SLPM, nCases, 'MFC_setpoint_SLPM');
 
 x_H2 = H2_volPct / 100;
 
 assert(all(V_chamber_m3 > 0), 'V_chamber_m3 must be greater than zero.');
-assert(all(T_local_K > 0), 'T_local_K must be greater than zero.');
+assert(all(T_chamber_K > 0), 'T_chamber_K must be greater than zero.');
 assert(T_std_K > 0, 'T_std_K must be greater than zero.');
-assert(all(P_final_Pa > 0), 'P_final_Pa must be greater than zero.');
+assert(all(P_chamber_Pa > 0), 'P_chamber_Pa must be greater than zero.');
 assert(P_std_Pa > 0, 'P_std_Pa must be greater than zero.');
 assert(all(x_H2 > 0 & x_H2 < 1), 'All hydrogen concentrations must be between 0 and 100 vol%%.');
-assert(all(P0_Pa > 0), 'P0_Pa must be greater than zero.');
 
-switch lower(char(fillMode))
-    case 'vented'
-        n_total_final_mol = (P_final_Pa .* V_chamber_m3) ./ (Ru .* T_local_K);
-        n_H2_mol = x_H2 .* n_total_final_mol;
-        finalPressure_Pa = P_final_Pa;
-
-    case 'sealed'
-        n_air_initial_mol = (P0_Pa .* V_chamber_m3) ./ (Ru .* T_local_K);
-        n_H2_mol = (x_H2 ./ (1 - x_H2)) .* n_air_initial_mol;
-        finalPressure_Pa = P0_Pa ./ (1 - x_H2);
-
-    otherwise
-        error('Unknown fillMode. Use "vented" or "sealed".');
-end
+n_total_mol = (P_chamber_Pa .* V_chamber_m3) ./ (Ru .* T_chamber_K);
+n_H2_mol = x_H2 .* n_total_mol;
 
 m_H2_kg = n_H2_mol * M_H2;
+m_H2_injected_g = 1e3 * m_H2_kg;
 
-V_H2_local_m3 = (n_H2_mol .* Ru .* T_local_K) ./ P_final_Pa;
+V_H2_injected_m3 = (n_H2_mol .* Ru .* T_chamber_K) ./ P_chamber_Pa;
 V_H2_std_m3 = (n_H2_mol .* Ru .* T_std_K) ./ P_std_Pa;
-MFC_setpoint_SLPM = MFC_setpoint_std_m3_s * 60 * 1e3;
+V_chamber_L = 1e3 * V_chamber_m3;
+V_H2_injected_L = 1e3 * V_H2_injected_m3;
+V_H2_std_L = 1e3 * V_H2_std_m3;
+MFC_setpoint_std_m3_s = MFC_setpoint_SLPM * 1e-3 / 60;
 
 injectionTime_min = nan(size(x_H2));
 injectionTime_s = 60 * injectionTime_min;
@@ -89,83 +73,71 @@ injectionTime_s(validSetpoint) = V_H2_std_m3(validSetpoint) ./ MFC_setpoint_std_
 injectionTime_min(validSetpoint) = injectionTime_s(validSetpoint) / 60;
 
 resultHeaders = { ...
-    'V_chamber_m3', ...
-    'T_local_K', ...
-    'P_final_Pa', ...
+    'V_chamber_L', ...
+    'T_chamber_K', ...
+    'P_chamber_Pa', ...
     'H2_volPct', ...
-    'H2_fraction', ...
-    'n_H2_mol', ...
-    'm_H2_kg', ...
-    'V_H2_local_m3', ...
-    'V_H2_std_m3', ...
-    'MFC_setpoint_std_m3_s', ...
+    'm_H2_injected_g', ...
+    'V_H2_injected_L', ...
+    'V_H2_std_L', ...
     'MFC_setpoint_SLPM', ...
     'InjectionTime_s', ...
-    'InjectionTime_min', ...
-    'FinalPressure_Pa'};
+    'InjectionTime_min'};
 
 resultMatrix = [ ...
-    V_chamber_m3(:), ...
-    T_local_K(:), ...
-    P_final_Pa(:), ...
+    V_chamber_L(:), ...
+    T_chamber_K(:), ...
+    P_chamber_Pa(:), ...
     H2_volPct(:), ...
-    x_H2(:), ...
-    n_H2_mol(:), ...
-    m_H2_kg(:), ...
-    V_H2_local_m3(:), ...
-    V_H2_std_m3(:), ...
-    MFC_setpoint_std_m3_s(:), ...
+    m_H2_injected_g(:), ...
+    V_H2_injected_L(:), ...
+    V_H2_std_L(:), ...
     MFC_setpoint_SLPM(:), ...
     injectionTime_s(:), ...
-    injectionTime_min(:), ...
-    finalPressure_Pa(:)];
+    injectionTime_min(:)];
 
 Results = struct();
 Results.inputs = struct( ...
     'V_chamber_m3', V_chamber_m3, ...
-    'T_local_K', T_local_K, ...
-    'P_final_Pa', P_final_Pa, ...
+    'T_chamber_K', T_chamber_K, ...
+    'P_chamber_Pa', P_chamber_Pa, ...
     'H2_volPct', H2_volPct, ...
-    'fillMode', char(fillMode), ...
-    'P0_Pa', P0_Pa, ...
     'T_std_K', T_std_K, ...
     'P_std_Pa', P_std_Pa, ...
-    'MFC_setpoint_std_m3_s', MFC_setpoint_std_m3_s);
+    'MFC_setpoint_SLPM', MFC_setpoint_SLPM);
 Results.headers = resultHeaders;
 Results.data = resultMatrix;
 Results.V_chamber_m3 = V_chamber_m3(:);
-Results.T_local_K = T_local_K(:);
-Results.P_final_Pa = P_final_Pa(:);
+Results.V_chamber_L = V_chamber_L(:);
+Results.T_chamber_K = T_chamber_K(:);
+Results.P_chamber_Pa = P_chamber_Pa(:);
 Results.H2_volPct = H2_volPct(:);
 Results.H2_fraction = x_H2(:);
 Results.n_H2_mol = n_H2_mol(:);
 Results.m_H2_kg = m_H2_kg(:);
-Results.V_H2_local_m3 = V_H2_local_m3(:);
+Results.m_H2_injected_g = m_H2_injected_g(:);
+Results.V_H2_injected_m3 = V_H2_injected_m3(:);
 Results.V_H2_std_m3 = V_H2_std_m3(:);
-Results.MFC_setpoint_std_m3_s = MFC_setpoint_std_m3_s(:);
+Results.V_H2_injected_L = V_H2_injected_L(:);
+Results.V_H2_std_L = V_H2_std_L(:);
 Results.MFC_setpoint_SLPM = MFC_setpoint_SLPM(:);
 Results.InjectionTime_s = injectionTime_s(:);
 Results.InjectionTime_min = injectionTime_min(:);
 Results.FillTime_s = injectionTime_s(:);
 Results.FillTime_min = injectionTime_min(:);
-Results.FinalPressure_Pa = finalPressure_Pa(:);
 
 if exist('table', 'builtin') || exist('table', 'file')
     Results.table = table( ...
-        Results.V_chamber_m3, ...
-        Results.T_local_K, ...
-        Results.P_final_Pa, ...
+        Results.V_chamber_L, ...
+        Results.T_chamber_K, ...
+        Results.P_chamber_Pa, ...
         Results.H2_volPct, ...
-        Results.H2_fraction, ...
-        Results.n_H2_mol, ...
-        Results.m_H2_kg, ...
-        Results.V_H2_local_m3, ...
-        Results.V_H2_std_m3, ...
-        Results.MFC_setpoint_std_m3_s, ...
+        Results.m_H2_injected_g, ...
+        Results.V_H2_injected_L, ...
+        Results.V_H2_std_L, ...
         Results.MFC_setpoint_SLPM, ...
         Results.InjectionTime_s, ...
         Results.InjectionTime_min, ...
-        Results.FinalPressure_Pa, ...
         'VariableNames', resultHeaders);
 end
 
@@ -177,11 +149,11 @@ if makePlot
 
     if canPlot
         figure('Color', 'w');
-        plot(H2_volPct, m_H2_kg, 'o-', 'LineWidth', 1.5, 'MarkerSize', 7);
+        plot(H2_volPct, m_H2_injected_g, 'o-', 'LineWidth', 1.5, 'MarkerSize', 7);
         grid on
         xlabel('Hydrogen concentration [vol%]')
-        ylabel('Required hydrogen mass [kg]')
-        title(sprintf('Required H2 Mass (%s mode)', fillMode))
+        ylabel('Injected hydrogen mass [g]')
+        title('Required H2 Mass for Vented Filling')
     end
 end
 
