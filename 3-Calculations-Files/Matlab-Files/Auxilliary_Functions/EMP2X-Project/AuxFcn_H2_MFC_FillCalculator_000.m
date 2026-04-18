@@ -1,4 +1,4 @@
-function Results = AuxFcn_H2_MFC_FillCalculator_000(V_chamber_m3, T_chamber_K, P_chamber_Pa, H2_volPct, T_std_K, P_std_Pa, MFC_setpoint_SLPM, makePlot)
+function Results = AuxFcn_H2_MFC_FillCalculator_000(V_chamber_m3, T_chamber_K, P_chamber_Pa, H2_volPct, T_std_K, P_std_Pa, MFC_setpoint_SLPM, makePlot, Ru, M_H2)
 % AuxFcn_H2_MFC_FillCalculator_000
 % Estimate the hydrogen amount required to reach target chamber
 % concentrations during vented filling and, optionally, estimate injection
@@ -15,26 +15,16 @@ function Results = AuxFcn_H2_MFC_FillCalculator_000(V_chamber_m3, T_chamber_K, P
 %   MFC_setpoint_SLPM     Alicat setpoint [SLPM], scalar or per-test vector,
 %                         use NaN to skip injection time
 %   makePlot              logical flag, true to generate a plot
+%   Ru                    universal gas constant [J/(mol*K)]
+%   M_H2                  hydrogen molar mass [kg/mol]
 %
 
 % Output
 %   Results               struct with inputs, vectors, and optional table
 
-if nargin < 8 || isempty(makePlot)
-    makePlot = true;
-end
-if nargin < 7 || isempty(MFC_setpoint_SLPM)
-    MFC_setpoint_SLPM = NaN;
-end
-if nargin < 6 || isempty(P_std_Pa)
-    P_std_Pa = 101325;
-end
-if nargin < 5 || isempty(T_std_K)
-    T_std_K = 298.15;
-end
-
-Ru = 8.314462618;                        % universal gas constant [J/(mol*K)]
-M_H2 = 2.01588e-3;                       % hydrogen molar mass [kg/mol]
+assert(nargin == 10, ['AuxFcn_H2_MFC_FillCalculator_000 requires 10 inputs: ', ...
+    'V_chamber_m3, T_chamber_K, P_chamber_Pa, H2_volPct, T_std_K, ', ...
+    'P_std_Pa, MFC_setpoint_SLPM, makePlot, Ru, M_H2.']);
 
 H2_volPct = H2_volPct(:);
 nCases = numel(H2_volPct);
@@ -52,6 +42,9 @@ assert(T_std_K > 0, 'T_std_K must be greater than zero.');
 assert(all(P_chamber_Pa > 0), 'P_chamber_Pa must be greater than zero.');
 assert(P_std_Pa > 0, 'P_std_Pa must be greater than zero.');
 assert(all(x_H2 > 0 & x_H2 < 1), 'All hydrogen concentrations must be between 0 and 100 vol%%.');
+assert(islogical(makePlot) && isscalar(makePlot), 'makePlot must be a logical scalar.');
+assert(isnumeric(Ru) && isscalar(Ru) && Ru > 0, 'Ru must be a positive numeric scalar.');
+assert(isnumeric(M_H2) && isscalar(M_H2) && M_H2 > 0, 'M_H2 must be a positive numeric scalar.');
 
 n_total_mol = (P_chamber_Pa .* V_chamber_m3) ./ (Ru .* T_chamber_K);
 n_H2_mol = x_H2 .* n_total_mol;
@@ -104,7 +97,10 @@ Results.inputs = struct( ...
     'H2_volPct', H2_volPct, ...
     'T_std_K', T_std_K, ...
     'P_std_Pa', P_std_Pa, ...
-    'MFC_setpoint_SLPM', MFC_setpoint_SLPM);
+    'MFC_setpoint_SLPM', MFC_setpoint_SLPM, ...
+    'makePlot', makePlot, ...
+    'Ru', Ru, ...
+    'M_H2', M_H2);
 Results.headers = resultHeaders;
 Results.data = resultMatrix;
 Results.V_chamber_m3 = V_chamber_m3(:);
