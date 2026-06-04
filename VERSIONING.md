@@ -49,8 +49,8 @@ git status --short
 git add .
 git commit -m "Files Setup"
 git push origin main
-git tag -a v0.0.6 -m "v0.0.6"
-git push origin v0.0.6
+git tag -a v0.0.7 -m "v0.0.7"
+git push origin v0.0.7
 git --no-pager log -1 --stat
 
 ```
