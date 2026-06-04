@@ -14,9 +14,9 @@ function AuxFcn_Figure_Settings(xlab,ylab,zlab,titel,S)              % format fi
 set(0,'defaulttextinterpreter','latex')
 set(0,'defaultAxesTickLabelInterpreter','latex'); 
 set(0,'defaultLegendInterpreter','latex');
-blue = [0 0.4470 0.7410];
-grey = .75*[1 1 1];
-mark = 'ooss';
+% blue = [0 0.4470 0.7410];
+% grey = .75*[1 1 1];
+% mark = 'ooss';
 set(gca, 'FontName', "Helvetica") ;
 % figure                                       % create figure
 hold on                                      % multiple plots

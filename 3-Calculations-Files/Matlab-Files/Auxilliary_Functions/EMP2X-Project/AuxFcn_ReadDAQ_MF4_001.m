@@ -6,8 +6,8 @@ function daqData = AuxFcn_ReadDAQ_MF4_001(filePath, options)
 % Validated against: Kistler KiStudio equidistant MDF 4.10 files.
 %
 % REQUIREMENTS:
-%   MATLAB Vehicle Network Toolbox  (provides mdfinfo / mdfread)
-%   Check: exist('mdfinfo','file') == 2
+%   MATLAB Vehicle Network Toolbox or another installed MATLAB product that
+%   provides MDF access functions (mdfInfo/mdfRead or mdfinfo/mdfread).
 %
 % HOW MATLAB mdfread RETURNS DATA:
 %   mdfread() returns a TIMETABLE (not a plain table).
@@ -106,13 +106,9 @@ end
 filePath = char(strtrim(filePath));
 
 % -------------------------------------------------------------------------
-% Toolbox guard
+% MDF function guard
 % -------------------------------------------------------------------------
-assert(exist('mdfinfo','file') == 2, ...
-    ['mdfinfo() not found. The Vehicle Network Toolbox is required ' ...
-     'to read MF4 files. Check your MATLAB toolbox installation.']);
-assert(exist('mdfread','file') == 2, ...
-    'mdfread() not found. Check your MATLAB toolbox installation.');
+[mdfInfoFcn, mdfReadFcn, mdfFunctionNames] = localResolveMdfFunctions();
 
 % -------------------------------------------------------------------------
 % File validation
@@ -128,9 +124,9 @@ assert(any(strcmpi(ext, validExts)), ...
     'Extension "%s" is not a recognised MDF extension (.mf4 / .mdf).', ext);
 
 % -------------------------------------------------------------------------
-% Inspect file structure via mdfinfo
+% Inspect file structure via mdfInfo/mdfinfo
 % -------------------------------------------------------------------------
-info   = mdfinfo(filePath);
+info   = mdfInfoFcn(filePath);
 cgIdx  = options.ChannelGroupIdx;
 nGroups = numel(info.ChannelGroup);
 
@@ -147,13 +143,14 @@ if ~isempty(options.ChannelNames)
     readArgs = [readArgs, {'ChannelNames', cellstr(string(options.ChannelNames))}];
 end
 
-tbl = mdfread(filePath, readArgs{:});
+tbl = mdfReadFcn(filePath, readArgs{:});
 
 % Validate that we received a timetable
 assert(isa(tbl, 'timetable'), ...
-    ['mdfread returned a %s instead of a timetable. ' ...
+    ['%s returned a %s instead of a timetable. ' ...
      'This may indicate an unsupported MDF version or toolbox release. ' ...
-     'Inspect the output of mdfread(''%s'') manually.'], class(tbl), fileName);
+     'Inspect the output of %s(''%s'') manually.'], ...
+     mdfFunctionNames.read, class(tbl), mdfFunctionNames.read, fileName);
 
 % -------------------------------------------------------------------------
 % Extract time vector from RowTimes (duration → seconds)
@@ -275,6 +272,36 @@ end
 % =========================================================================
 %  LOCAL HELPERS
 % =========================================================================
+
+function [mdfInfoFcn, mdfReadFcn, names] = localResolveMdfFunctions()
+% localResolveMdfFunctions
+% Support both modern camelCase names and older lowercase names.
+
+    if exist('mdfInfo', 'file') == 2
+        mdfInfoFcn = @mdfInfo;
+        names.info = "mdfInfo";
+    elseif exist('mdfinfo', 'file') == 2
+        mdfInfoFcn = @mdfinfo;
+        names.info = "mdfinfo";
+    else
+        error(['No MATLAB MDF metadata function found. Expected mdfInfo() ' ...
+            'or mdfinfo(). Install/enable Vehicle Network Toolbox, or use ' ...
+            'a Python/asammdf conversion workflow for MF4 files.']);
+    end
+
+    if exist('mdfRead', 'file') == 2
+        mdfReadFcn = @mdfRead;
+        names.read = "mdfRead";
+    elseif exist('mdfread', 'file') == 2
+        mdfReadFcn = @mdfread;
+        names.read = "mdfread";
+    else
+        error(['No MATLAB MDF read function found. Expected mdfRead() ' ...
+            'or mdfread(). Install/enable Vehicle Network Toolbox, or use ' ...
+            'a Python/asammdf conversion workflow for MF4 files.']);
+    end
+end
+
 
 function [fs, dt] = localEstimateSamplingRate(t, info, cgIdx)
 % localEstimateSamplingRate

@@ -98,6 +98,7 @@ arguments
     options.TimeZone     (1,1) string  = ""
     options.Units                      = []
     options.ChannelType                = []
+    options.WarnNonUniform (1,1) logical = true
 end
 
 % -------------------------------------------------------------------------
@@ -220,10 +221,11 @@ else
     dt_mean  = NaN;
     dt_std   = NaN;
     fs_mean  = NaN;
+    relStd   = NaN;
     isNonUniform = true;
 end
 
-if isNonUniform
+if isNonUniform && options.WarnNonUniform
     warning(['AuxFcn_ReadDAQ_CSV_001: Non-uniform sampling detected in "%s" ' ...
         '(dt std/mean = %.1f%%). fs/dt are MEAN estimates only. ' ...
         'Do not use with AuxFcn_SamplingRateVerification_001.'], ...
