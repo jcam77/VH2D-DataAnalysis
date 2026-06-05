@@ -61,3 +61,11 @@ More extraction examples are documented in:
 ```text
 3-Calculations-Files/Matlab-Files/Main_Functions/EMP2X-Project/README_MainFcn_Load_VH2D_RawCampaign_001.md
 ```
+
+Campaign metadata JSON files are stored in:
+
+```text
+2-Data/RawData/VH2D-Wk22/Metadata
+```
+
+Use `AuxFcn_LoadVH2DMetadata_001` to read the full JSON metadata, then use `AuxFcn_BuildVH2DRawReportTables_001` to display small report-friendly tables. The complete metadata remains available internally, but the DPP should show focused summaries such as raw load status, run plan, gas mixing, DAQ systems, sensor mapping, and group notes.

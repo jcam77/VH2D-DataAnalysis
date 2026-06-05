@@ -167,6 +167,59 @@ disp(overview02);
 
 The overview is useful for checking sample counts, channel counts, sampling rates, and load status before selecting data for processing.
 
+## Metadata JSON Tables
+
+Campaign metadata can be loaded from:
+
+```text
+2-Data/RawData/VH2D-Wk22/Metadata
+```
+
+with:
+
+```matlab
+metadataRoot = fullfile(projectRoot, "2-Data", "RawData", "VH2D-Wk22", "Metadata");
+metadata = AuxFcn_LoadVH2DMetadata_001(metadataRoot, Groups=["02","03","04"]);
+```
+
+This reads:
+
+- `Experiment_Plan_v000.json`
+- `gas_mixing.json`
+- `daq_systems.json`
+- `sensors_mapping.json`
+
+and creates:
+
+```matlab
+metadata.experimentPlanTable
+metadata.gasMixingTable
+metadata.daqSystemsTable
+metadata.sensorMappingTable
+metadata.groupNotesTable
+```
+
+To combine loaded raw-data overview with run metadata internally:
+
+```matlab
+rawDataOverviewTable = AuxFcn_BuildVH2DRawOverviewTable_001(VH2D_Wk22, metadata);
+```
+
+For the DPP/report, prefer small readable tables instead of displaying the complete metadata:
+
+```matlab
+reportTables = AuxFcn_BuildVH2DRawReportTables_001(VH2D_Wk22, metadata);
+
+disp(reportTables.rawLoadStatus);
+disp(reportTables.runPlan);
+disp(reportTables.gasMixing);
+disp(reportTables.daqSystems);
+disp(reportTables.sensorMap);
+disp(reportTables.groupNotes);
+```
+
+This keeps the raw loader separate from metadata enrichment while avoiding oversized report tables.
+
 ## Campaign-Specific Details
 
 Most campaigns should work with only:
