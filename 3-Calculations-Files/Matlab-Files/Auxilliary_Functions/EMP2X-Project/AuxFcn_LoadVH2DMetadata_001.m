@@ -42,6 +42,14 @@ assert(isfile(filePath), 'Metadata JSON file not found: %s', filePath);
 data = jsondecode(fileread(filePath));
 end
 
+function item = localGetJsonItem(items, idx)
+if iscell(items)
+    item = items{idx};
+else
+    item = items(idx);
+end
+end
+
 function tbl = localExperimentPlanTable(experimentPlan, groups)
 experiments = experimentPlan.experiments;
 n = numel(experiments);
@@ -62,7 +70,7 @@ DataFiles = strings(n,1);
 Notes = strings(n,1);
 
 for i = 1:n
-    item = experiments(i);
+    item = localGetJsonItem(experiments, i);
     RunId(i) = localGetString(item, "name");
     GroupId(i) = localRunToGroupId(RunId(i));
     Done(i) = localGetLogical(item, "done");
@@ -98,38 +106,65 @@ n = numel(records);
 RunId = strings(n,1);
 GroupId = strings(n,1);
 TargetH2_vol_pct = NaN(n,1);
+targetVol = NaN(n,1);
 PChamber_Pa = NaN(n,1);
 TChamber_K = NaN(n,1);
+tChamberC = NaN(n,1);
 MFCFlow_slpm = NaN(n,1);
+mfcFlowSlpm = NaN(n,1);
 H2MassInjected_g = NaN(n,1);
+mH2EstimatedG = NaN(n,1);
+mH2CorrectedG = NaN(n,1);
 H2VolumeStd_L = NaN(n,1);
 ChamberVolumeCorrected_m3 = NaN(n,1);
+V_chamber_geom_m3 = NaN(n,1);
+volPipesM3 = NaN(n,1);
+V_chamber_corrected_m3 = NaN(n,1);
+V_H2_injected_m3 = NaN(n,1);
 InjectionTime_s = NaN(n,1);
 InjectionTime_min = NaN(n,1);
 CalibrationApplied = strings(n,1);
 Notes = strings(n,1);
 
 for i = 1:n
-    item = records(i);
+    item = localGetJsonItem(records, i);
     RunId(i) = localGetString(item, "runName");
     GroupId(i) = localGetString(item, "group");
     TargetH2_vol_pct(i) = localGetDouble(item, "targetVol");
+    targetVol(i) = TargetH2_vol_pct(i);
     PChamber_Pa(i) = localGetDouble(item, "pChamberPa");
     TChamber_K(i) = localGetDouble(item, "tChamberK");
+    tChamberC(i) = localGetDouble(item, "tChamberC");
+    if isnan(tChamberC(i)) && ~isnan(TChamber_K(i))
+        tChamberC(i) = TChamber_K(i) - 273.15;
+    end
     MFCFlow_slpm(i) = localGetDouble(item, "mfcFlowSlpm");
+    mfcFlowSlpm(i) = MFCFlow_slpm(i);
     H2MassInjected_g(i) = localGetDouble(item, "mH2InjectedG");
+    mH2EstimatedG(i) = localGetDouble(item, "mH2EstimatedG");
+    mH2CorrectedG(i) = localGetDouble(item, "mH2CorrectedG");
     H2VolumeStd_L(i) = localGetDouble(item, "vH2StdL");
     ChamberVolumeCorrected_m3(i) = localGetDouble(item, "vChamberCorrectedM3");
+    V_chamber_corrected_m3(i) = ChamberVolumeCorrected_m3(i);
+    V_chamber_geom_m3(i) = localGetResultsDouble(item, "V_chamber_geom_m3");
+    if isnan(V_chamber_geom_m3(i))
+        V_chamber_geom_m3(i) = localGetDouble(item, "lM") * ...
+            localGetDouble(item, "wM") * localGetDouble(item, "hM");
+    end
+    volPipesM3(i) = localGetDouble(item, "volPipesM3");
+    V_H2_injected_m3(i) = localGetResultsDouble(item, "V_H2_injected_m3");
     InjectionTime_s(i) = localGetDouble(item, "injectionTimeS");
     InjectionTime_min(i) = localGetDouble(item, "injectionTimeMin");
     CalibrationApplied(i) = localGetString(item, "calibrationApplied");
     Notes(i) = localGetString(item, "notes");
 end
 
-tbl = table(RunId, GroupId, TargetH2_vol_pct, PChamber_Pa, ...
-    TChamber_K, MFCFlow_slpm, H2MassInjected_g, H2VolumeStd_L, ...
-    ChamberVolumeCorrected_m3, InjectionTime_s, InjectionTime_min, ...
-    CalibrationApplied, Notes);
+tbl = table(RunId, GroupId, targetVol, tChamberC, mfcFlowSlpm, ...
+    V_chamber_geom_m3, volPipesM3, V_chamber_corrected_m3, ...
+    mH2EstimatedG, mH2CorrectedG, V_H2_injected_m3, ...
+    TargetH2_vol_pct, PChamber_Pa, TChamber_K, MFCFlow_slpm, ...
+    H2MassInjected_g, H2VolumeStd_L, ChamberVolumeCorrected_m3, ...
+    InjectionTime_s, InjectionTime_min, CalibrationApplied, Notes);
 tbl = localFilterByGroups(tbl, groups);
 end
 
@@ -150,7 +185,7 @@ IsActive = false(n,1);
 Notes = strings(n,1);
 
 for i = 1:n
-    item = systems(i);
+    item = localGetJsonItem(systems, i);
     DaqSystem(i) = strtrim(localGetString(item, "name"));
     Owner(i) = localGetString(item, "owner");
     Vendor(i) = localGetString(item, "vendor");
@@ -208,7 +243,7 @@ for iGroup = 1:numel(jsonGroups)
     Notes = strings(n,1);
 
     for i = 1:n
-        item = sensors(i);
+        item = localGetJsonItem(sensors, i);
         DaqSystem(i) = strtrim(localGetString(item, "daqSystem"));
         DaqChannel(i) = strtrim(localGetString(item, "daqChannel"));
         SensorId(i) = localGetString(item, "sensorId");
@@ -285,6 +320,15 @@ if isempty(tokens)
 else
     groupId = string(tokens{1});
 end
+end
+
+function value = localGetResultsDouble(s, fieldName)
+value = NaN;
+if ~isfield(s, "results") || isempty(s.results)
+    return
+end
+
+value = localGetDouble(s.results, fieldName);
 end
 
 function value = localGetString(s, fieldName)
