@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 
@@ -38,6 +39,74 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--raster", type=float, default=0.0, help="Optional resampling raster in seconds")
     parser.add_argument("--channels", default="", help="Comma-separated channel names to export")
     return parser.parse_args()
+
+
+def channel_unit_from_name(channel_name: str) -> str:
+    """Extract a bracketed unit from a dataframe column name, if present."""
+    match = re.search(r"\[([^\]]+)\]\s*$", channel_name)
+    if match:
+        return match.group(1).strip()
+    return ""
+
+
+def channel_base_name(channel_name: str) -> str:
+    """Remove a trailing bracketed unit label from a channel name."""
+    return re.sub(r"\s*\[[^\]]+\]\s*$", "", channel_name).strip()
+
+
+def build_unit_lookup(mdf) -> dict[str, str]:
+    """Build channel-name -> unit lookup from asammdf channel metadata."""
+    lookup: dict[str, str] = {}
+    channels_db = getattr(mdf, "channels_db", {}) or {}
+
+    for channel_name, entries in channels_db.items():
+        unit = ""
+        for entry in entries:
+            try:
+                group_index, channel_index = entry[:2]
+                signal = call_version_tolerant(
+                    mdf.get,
+                    name=channel_name,
+                    group=group_index,
+                    index=channel_index,
+                )
+                unit = str(getattr(signal, "unit", "") or "").strip()
+            except Exception:
+                unit = ""
+
+            if unit:
+                break
+
+        if unit and channel_name not in lookup:
+            lookup[str(channel_name)] = unit
+
+    return lookup
+
+
+def resolve_column_units(mdf, dataframe_columns: list[str]) -> list[str]:
+    """Resolve one unit per dataframe signal column."""
+    unit_lookup = build_unit_lookup(mdf)
+    units: list[str] = []
+
+    for column_name in dataframe_columns:
+        bracket_unit = channel_unit_from_name(column_name)
+        if bracket_unit:
+            units.append(bracket_unit)
+            continue
+
+        base_name = channel_base_name(column_name)
+        unit = unit_lookup.get(column_name, "") or unit_lookup.get(base_name, "")
+
+        if not unit:
+            try:
+                signal = call_version_tolerant(mdf.get, name=base_name)
+                unit = str(getattr(signal, "unit", "") or "").strip()
+            except Exception:
+                unit = ""
+
+        units.append(unit)
+
+    return units
 
 
 def main() -> None:
@@ -82,12 +151,17 @@ def main() -> None:
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_csv, index=False)
 
+    signal_columns = list(map(str, df.columns[1:]))
+    channel_units = resolve_column_units(mdf, signal_columns)
+
     metadata = {
         "input": str(input_path),
         "group_index_zero_based": args.group_index,
         "read_mode": "all_groups_to_dataframe",
         "raster_s": raster,
         "columns": list(map(str, df.columns)),
+        "channel_names": signal_columns,
+        "channel_units": channel_units,
         "n_samples": int(len(df.index)),
         "n_channels": max(0, int(len(df.columns) - 1)),
         "asammdf_version": __import__("asammdf").__version__,

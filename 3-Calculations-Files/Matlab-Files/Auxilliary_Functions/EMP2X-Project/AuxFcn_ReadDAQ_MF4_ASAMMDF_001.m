@@ -74,9 +74,19 @@ tbl = readtable(csvPath, 'VariableNamingRule', 'preserve');
 assert(width(tbl) >= 2, ...
     'asammdf export from "%s" did not contain signal channels.', fileName);
 
+asammdfMeta = struct();
+if exist(jsonPath, 'file') == 2
+    try
+        asammdfMeta = jsondecode(fileread(jsonPath));
+    catch
+        asammdfMeta = struct();
+    end
+end
+
 t = tbl{:, 1};
 signalMat = tbl{:, 2:end};
 channelNames = string(tbl.Properties.VariableNames(2:end));
+units = localReadChannelUnits(asammdfMeta, numel(channelNames));
 
 [dt, fs, isNonUniform, dtStd] = localEstimateTiming(t);
 
@@ -91,7 +101,7 @@ daqData.signal = signalMat;
 daqData.nSamples = height(tbl);
 daqData.nChannels = size(signalMat, 2);
 daqData.channelNames = reshape(channelNames, 1, []);
-daqData.units = repmat("raw", 1, daqData.nChannels);
+daqData.units = units;
 daqData.channelType = repmat("unknown", 1, daqData.nChannels);
 daqData.tbl = tbl;
 
@@ -103,15 +113,25 @@ daqData.meta.isNonUniform = isNonUniform;
 daqData.meta.dtStd = dtStd;
 daqData.meta.convertedCsvPath = string(csvPath);
 daqData.meta.convertedJsonPath = string(jsonPath);
+daqData.meta.asammdf = asammdfMeta;
 
-if exist(jsonPath, 'file') == 2
-    try
-        daqData.meta.asammdf = jsondecode(fileread(jsonPath));
-    catch
-        daqData.meta.asammdf = struct();
-    end
 end
 
+function units = localReadChannelUnits(asammdfMeta, nChannels)
+units = repmat("raw", 1, nChannels);
+
+if ~isstruct(asammdfMeta) || ~isfield(asammdfMeta, 'channel_units')
+    return
+end
+
+rawUnits = string(asammdfMeta.channel_units);
+rawUnits = reshape(rawUnits, 1, []);
+if numel(rawUnits) ~= nChannels
+    return
+end
+
+rawUnits(strlength(strtrim(rawUnits)) == 0) = "raw";
+units = rawUnits;
 end
 
 function pythonExe = localResolvePythonExecutable(pythonExe)

@@ -76,10 +76,10 @@ campaigns
             .DAQ_1
             .DAQ_2_3
             .DAQ_4
-            .H2CM
-            .Hydrogen_Sensors
-              .Sensor_1
-              .Sensor_2
+            .H2BGA
+            .HS
+              .D_2
+              .D_3
 ```
 
 ## Extracting Data
@@ -136,19 +136,21 @@ channels = run.DAQ_2_3.channels;
 ```
 
 ```matlab
-% H2CM raw signal
-t_h2cm = run.H2CM.t;
-h2cm_raw = run.H2CM.signal;
-h2cm_channels = run.H2CM.channels;
+% H2BGA raw signal output ppm
+% H2BGA = Hydrogen Binary Gas Analyser measurements.
+t_h2bga = run.H2BGA.t;
+h2bga_raw = run.H2BGA.signal;
+h2bga_channels = run.H2BGA.channels;
 ```
 
 ```matlab
 % Hydrogen sensor output percent
-t_s1 = run.Hydrogen_Sensors.Sensor_1.t;
-h2_s1_pct = run.Hydrogen_Sensors.Sensor_1.signal;
+% HS = Hydrogen Sensors.
+t_d2 = run.HS.D_2.t;
+h2_d2_pct = run.HS.D_2.signal;
 
-t_s2 = run.Hydrogen_Sensors.Sensor_2.t;
-h2_s2_pct = run.Hydrogen_Sensors.Sensor_2.signal;
+t_d3 = run.HS.D_3.t;
+h2_d3_pct = run.HS.D_3.signal;
 ```
 
 To inspect what runs are available:
@@ -166,6 +168,21 @@ disp(overview02);
 ```
 
 The overview is useful for checking sample counts, channel counts, sampling rates, and load status before selecting data for processing.
+
+## Unit Conversion Layer
+
+The raw loader does not convert units. Unit conversion is a separate
+processing layer handled by:
+
+```matlab
+converted = AuxFcn_ConvertVH2DUnits_001(VH2D_Wk22);
+```
+
+Details are documented in:
+
+```text
+3-Calculations-Files/Matlab-Files/Auxilliary_Functions/EMP2X-Project/README_AuxFcn_ConvertVH2DUnits_001.md
+```
 
 ## Metadata JSON Tables
 
@@ -228,14 +245,17 @@ Most campaigns should work with only:
 campaigns = MainFcn_Load_VH2D_RawCampaign_001(campaignName, selectedGroups);
 ```
 
-Optional name-value inputs are available when a future campaign changes folder names or stream layout:
+Optional name-value inputs are available when a campaign changes folder names or stream layout:
 
 - `rawFolderName`: folder under `2-Data/RawData`, e.g. `VH2D-Wk22`.
 - `runPattern`: run-folder discovery pattern.
 - `runIdPattern`: regexp used to extract group/run number from folder names.
 - `streamSpecs`: folders, file patterns, formats, and output paths.
 
-If a future campaign separates `DAQ-2` and `DAQ-3`, pass a custom `StreamSpecs`:
+The current default keeps `DAQ-2-3` as one combined MF4 stream and loads it
+as `.DAQ_2_3`. If a future campaign separates `DAQ-2` and `DAQ-3`, pass a
+custom `StreamSpecs` so the loaded run structure contains `.DAQ_2` and
+`.DAQ_3` instead:
 
 ```matlab
 streamSpecs = struct( ...
@@ -246,9 +266,12 @@ streamSpecs = struct( ...
     'outputPath', {"DAQ_2", "DAQ_3"}, ...
     'requiredChannelPattern', {"", ""});
 
-campaigns = MainFcn_Load_VH2D_RawCampaign_001("VH2D_Wk27", ["01","02"], ...
+campaigns = MainFcn_Load_VH2D_RawCampaign_001(campaignName, selectedGroups, ...
     StreamSpecs=streamSpecs);
 ```
+
+Do this as a function input rather than by hardcoding campaign-specific DAQ
+layout inside `MainFcn_Load_VH2D_RawCampaign_001.m`.
 
 ## Overview Table
 
@@ -260,7 +283,7 @@ Each group has an `overview` table with one row per run. For every configured st
 - `<stream>_Dt_s`: sample interval in seconds.
 - `<stream>_Status`: loaded, missing file, failed, or warning status.
 
-For non-uniform streams such as some CSV/H2CM logs, `Fs_Hz` and `Dt_s` are mean estimates from the reader or from the time vector. Use the raw `t` vector for detailed timing checks.
+For non-uniform streams such as some CSV/H2BGA logs, `Fs_Hz` and `Dt_s` are mean estimates from the reader or from the time vector. Use the raw `t` vector for detailed timing checks.
 
 Because this changes the cached overview table shape, `MainFcn_Load_VH2D_RawCampaign_001.m` uses a new `cacheVersion` and rebuilds the `.mat` once.
 
@@ -281,4 +304,4 @@ MainFcn_Load_VH2D_RawCampaign_001.m
 
 ## Raw-Only Rule
 
-This loader only loads raw stream data. It does not synchronize time vectors, resample data, align sensors, filter data, or convert H2CM ppm to vol.%. Those steps should remain explicit in later processing scripts.
+This loader only loads raw stream data. It does not synchronize time vectors, resample data, align sensors, filter data, or convert H2BGA ppm to vol.%. Those steps should remain explicit in later processing scripts.
