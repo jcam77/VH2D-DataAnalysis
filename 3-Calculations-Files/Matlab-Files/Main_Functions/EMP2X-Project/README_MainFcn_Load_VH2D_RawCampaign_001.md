@@ -237,6 +237,15 @@ disp(reportTables.groupNotes);
 
 This keeps the raw loader separate from metadata enrichment while avoiding oversized report tables.
 
+`reportTables.sensorMap` includes loaded-data lookup columns derived from the
+loaded campaign structure, not from the JSON metadata:
+
+- `LoadedDataChannel`: raw channel name found in the loaded data.
+- `LoadedDataColumn`: run/column evidence for where that channel appears.
+- `LoadedDataMatch`: matching rule used to connect metadata to loaded data.
+
+If no defensible loaded-channel match is found, these fields are left empty.
+
 ## Campaign-Specific Details
 
 Most campaigns should work with only:

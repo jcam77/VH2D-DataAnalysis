@@ -107,6 +107,42 @@ Details are documented in:
 3-Calculations-Files/Matlab-Files/Auxilliary_Functions/EMP2X-Project/README_AuxFcn_AlignVH2DTimeVectors_001.md
 ```
 
+## Pressure DC-Offset Removal Layer
+
+After alignment, remove pressure-channel background offset in a separate layer:
+
+```matlab
+offsetCorrected = AuxFcn_RemoveVH2DPressureOffset_001(aligned, ...
+    BaselineWindow_s=[-0.050, -0.005]);
+```
+
+This is applied only to pressure channels in `kPa`; trigger and concentration
+channels are copied unchanged. Details are documented in:
+
+```text
+3-Calculations-Files/Matlab-Files/Auxilliary_Functions/EMP2X-Project/README_AuxFcn_RemoveVH2DPressureOffset_001.md
+```
+
+## Pressure/Trigger Initial Crop Layer
+
+After pressure offset removal, create a pressure-preprocessed layer by cropping
+only the DAQ pressure/trigger streams:
+
+```matlab
+pressurePreprocessed = AuxFcn_CropVH2DPressureTriggerSignals_001( ...
+    offsetCorrected, ...
+    CropWindow_s=[-0.050, Inf], ...
+    StreamFields=["DAQ_1","DAQ_2_3","DAQ_4"]);
+```
+
+The full campaign structure is preserved. `H2BGA` and `HS` concentration
+streams are copied unchanged and will be handled later in a dedicated
+concentration preprocessing layer. Details are documented in:
+
+```text
+3-Calculations-Files/Matlab-Files/Auxilliary_Functions/EMP2X-Project/README_AuxFcn_CropVH2DPressureTriggerSignals_001.md
+```
+
 More extraction examples are documented in:
 
 ```text
