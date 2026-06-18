@@ -19,6 +19,9 @@ metadata = struct();
 metadata.root = metadataRoot;
 metadata.selectedGroups = string(options.Groups);
 
+% Keep both representations:
+%   Raw structs preserve everything from JSON for traceability.
+%   Tables expose selected fields for report and analysis workflows.
 experimentPlan = localReadJson(fullfile(metadataRoot, "Experiment_Plan_v000.json"));
 gasMixing = localReadJson(fullfile(metadataRoot, "gas_mixing.json"));
 daqSystems = localReadJson(fullfile(metadataRoot, "daq_systems.json"));
@@ -71,6 +74,7 @@ Notes = strings(n,1);
 
 for i = 1:n
     item = localGetJsonItem(experiments, i);
+    % Use the visible run name, not the app-internal numeric id.
     RunId(i) = localGetString(item, "name");
     GroupId(i) = localRunToGroupId(RunId(i));
     Done(i) = localGetLogical(item, "done");
@@ -128,6 +132,8 @@ Notes = strings(n,1);
 
 for i = 1:n
     item = localGetJsonItem(records, i);
+    % Keep original metadata names where useful and add report-friendly aliases
+    % such as targetVol and tChamberC.
     RunId(i) = localGetString(item, "runName");
     GroupId(i) = localGetString(item, "group");
     TargetH2_vol_pct(i) = localGetDouble(item, "targetVol");

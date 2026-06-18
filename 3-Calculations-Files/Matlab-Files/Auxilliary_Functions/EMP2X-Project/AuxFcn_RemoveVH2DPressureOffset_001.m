@@ -8,6 +8,7 @@ function offsetCorrected = AuxFcn_RemoveVH2DPressureOffset_001(aligned, options)
 arguments
     aligned (1,1) struct
     options.BaselineWindow_s (1,2) double = [-0.050, -0.005]
+    options.KeepSourceSignal (1,1) logical = true
 end
 
 offsetCorrected = aligned;
@@ -27,6 +28,8 @@ end
 
 groupFields = string(fieldnames(offsetCorrected.groups));
 for iGroup = 1:numel(groupFields)
+    % Preserve the same group/run/DAQ hierarchy. Only pressure-channel signal
+    % values are offset corrected.
     groupField = groupFields(iGroup);
     groupData = offsetCorrected.groups.(groupField);
     groupId = localGetStringField(groupData, "id", groupField);
@@ -43,18 +46,19 @@ for iGroup = 1:numel(groupFields)
         runData = groupData.runs.(runField);
         runId = localGetStringField(runData, "id", runField);
 
-        streamFields = string(fieldnames(runData));
-        streamFields = streamFields(streamFields ~= "id");
-        for iStream = 1:numel(streamFields)
-            streamField = streamFields(iStream);
-            value = runData.(streamField);
+        daqFields = string(fieldnames(runData));
+        daqFields = daqFields(daqFields ~= "id");
+        for iDAQ = 1:numel(daqFields)
+            daqField = daqFields(iDAQ);
+            value = runData.(daqField);
             if ~isstruct(value)
                 continue
             end
 
             [correctedValue, rows] = localCorrectValue( ...
-                value, groupId, runId, streamField, options.BaselineWindow_s);
-            offsetCorrected.groups.(groupField).runs.(runField).(streamField) = correctedValue;
+                value, groupId, runId, daqField, ...
+                options.BaselineWindow_s, options.KeepSourceSignal);
+            offsetCorrected.groups.(groupField).runs.(runField).(daqField) = correctedValue;
             groupOverview = localAppendTable(groupOverview, rows);
         end
     end
@@ -66,12 +70,16 @@ end
 offsetCorrected.offsetOverview = overview;
 end
 
-function [correctedValue, overview] = localCorrectValue(value, groupId, runId, streamPath, baselineWindow)
+function [correctedValue, overview] = localCorrectValue(value, groupId, runId, ...
+        daqPath, baselineWindow, keepSourceSignal)
 overview = table();
 correctedValue = value;
 
+% Correct only DAQ leaves that contain `signal`; recursively pass through
+% nested containers.
 if isfield(value, "signal")
-    [correctedValue, overview] = localCorrectStream(value, groupId, runId, streamPath, baselineWindow);
+    [correctedValue, overview] = localCorrectDAQ(value, groupId, runId, ...
+        daqPath, baselineWindow, keepSourceSignal);
     return
 end
 
@@ -84,28 +92,38 @@ for iField = 1:numel(nestedFields)
     end
 
     [correctedNested, nestedOverview] = localCorrectValue( ...
-        nestedValue, groupId, runId, streamPath + "." + nestedField, baselineWindow);
+        nestedValue, groupId, runId, daqPath + "." + nestedField, ...
+        baselineWindow, keepSourceSignal);
     correctedValue.(nestedField) = correctedNested;
     overview = localAppendTable(overview, nestedOverview);
 end
 end
 
-function [correctedStream, overview] = localCorrectStream(streamData, groupId, runId, streamPath, baselineWindow)
-correctedStream = streamData;
+function [correctedDAQ, overview] = localCorrectDAQ(daqData, groupId, ...
+        runId, daqPath, baselineWindow, keepSourceSignal)
+correctedDAQ = daqData;
 overview = table();
 
-if ~isfield(streamData, "t_s") || isempty(streamData.t_s) || ...
-        ~isfield(streamData, "signal") || isempty(streamData.signal)
+if ~isfield(daqData, "t_s") || isempty(daqData.t_s) || ...
+        ~isfield(daqData, "signal") || isempty(daqData.signal)
     return
 end
 
-t = streamData.t_s(:);
-signal = double(streamData.signal);
+t = daqData.t_s(:);
+signal = double(daqData.signal);
 nChannels = size(signal, 2);
-channels = localPadStringRow(localGetStringRow(streamData, "channels"), ...
+channels = localPadStringRow(localGetStringRow(daqData, "channels"), ...
     nChannels, "Channel_" + string(1:nChannels));
-units = localPadStringRow(localGetStringRow(streamData, "units"), ...
+units = localPadStringRow(localGetStringRow(daqData, "units"), ...
     nChannels, repmat("raw", 1, nChannels));
+isPressureChannel = lower(strtrim(units)) == "kpa";
+
+% Streams with no pressure channels are copied exactly as they came in. This
+% prevents concentration streams such as H2BGA and HS from receiving
+% misleading offset-correction metadata.
+if ~any(isPressureChannel)
+    return
+end
 
 correctedSignal = signal;
 baselineMean = NaN(nChannels, 1);
@@ -113,10 +131,14 @@ baselineStd = NaN(nChannels, 1);
 baselineSamples = zeros(nChannels, 1);
 status = strings(nChannels, 1);
 
+% The baseline is estimated from a pre-trigger time window in the aligned
+% time base. This avoids using the trigger edge itself.
 idxWindow = t >= baselineWindow(1) & t <= baselineWindow(2);
 
 for iChannel = 1:nChannels
-    if lower(strtrim(units(iChannel))) ~= "kpa"
+    % Only pressure channels already converted to kPa are corrected. Trigger
+    % voltage and concentration channels remain in the structure unchanged.
+    if ~isPressureChannel(iChannel)
         status(iChannel) = "not_offset_corrected";
         continue
     end
@@ -136,12 +158,14 @@ for iChannel = 1:nChannels
     status(iChannel) = "offset_removed";
 end
 
-correctedStream.source_signal = streamData.signal;
-correctedStream.signal = correctedSignal;
-correctedStream.offsetCorrection = table( ...
+if keepSourceSignal
+    correctedDAQ.source_signal = daqData.signal;
+end
+correctedDAQ.signal = correctedSignal;
+correctedDAQ.offsetCorrection = table( ...
     repmat(string(groupId), nChannels, 1), ...
     repmat(string(runId), nChannels, 1), ...
-    repmat(string(streamPath), nChannels, 1), ...
+    repmat(string(daqPath), nChannels, 1), ...
     (1:nChannels)', ...
     channels(:), ...
     units(:), ...
@@ -151,11 +175,11 @@ correctedStream.offsetCorrection = table( ...
     baselineStd, ...
     baselineSamples, ...
     status, ...
-    'VariableNames', {'GroupId','RunId','Stream','Column','Channel', ...
+    'VariableNames', {'GroupId','RunId','DAQs','Column','Channel', ...
     'Unit','BaselineWindowStart_s','BaselineWindowEnd_s', ...
     'BaselineMean_kPa','BaselineStd_kPa','BaselineSamples','Status'});
 
-overview = correctedStream.offsetCorrection;
+overview = correctedDAQ.offsetCorrection;
 end
 
 function values = localGetStringRow(s, fieldName)

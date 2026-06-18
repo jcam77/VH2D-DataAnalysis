@@ -15,15 +15,16 @@ Alignment:
 
 ```matlab
 aligned = AuxFcn_AlignVH2DTimeVectors_001(converted, ...
-    TriggerThreshold_V=4, ...
-    ReferenceStreams="DAQ_1", ...
-    AlignStreams=["DAQ_2_3","DAQ_4"]);
+    TriggerZeroThreshold_V=4, ...
+    DAQsAlreadyAligned=strings(0,1), ...
+    DAQsToAlign=["DAQ_1","DAQ_2_3","DAQ_4"]);
 ```
 
 ## Alignment Rule
 
-- `DAQ_1` is treated as already zero-aligned and is kept unchanged.
-- `DAQ_2_3` and `DAQ_4` are shifted so the first 4 V trigger crossing becomes `t = 0 s`.
+- The trigger-zero voltage threshold is selected outside the function using `TriggerZeroThreshold_V`.
+- DAQs listed in `DAQsAlreadyAligned` are treated as already zero-aligned and are kept unchanged. Use `strings(0,1)` when no DAQ should be kept unchanged.
+- DAQs listed in `DAQsToAlign` are shifted so the first trigger threshold crossing becomes `t = 0 s`.
 - Time samples before the trigger become negative.
 - The original time vector is preserved as `source_t_s`.
 - The aligned time vector is stored as `t_s`.
@@ -110,7 +111,7 @@ the zero-time reference.
 
 ### 4. Shift the Time Vector
 
-For streams selected in `AlignStreams`, the aligned time vector is:
+For DAQs selected in `DAQsToAlign`, the aligned time vector is:
 
 ```matlab
 t_aligned = t_original - t_trigger;
@@ -131,14 +132,15 @@ stream.source_t_s = t_original;
 stream.t_s = t_aligned;
 ```
 
-For `DAQ_1`, no shift is applied by default:
+For DAQs selected in `DAQsAlreadyAligned`, no shift is applied:
 
 ```matlab
 stream.source_t_s = stream.t_s;
 stream.t_s = stream.t_s;
 ```
 
-because `DAQ_1` is treated as already trigger-zero aligned.
+This is intended for DAQs where the recorded time vector is already aligned to
+the trigger zero time.
 
 ## Trigger Channel Detection
 
@@ -167,7 +169,7 @@ aligned
           .DAQ_4
 ```
 
-Each aligned stream keeps:
+Each aligned DAQ keeps:
 
 ```matlab
 runAligned.DAQ_4.source_t_s      % original converted time vector
@@ -181,7 +183,7 @@ runAligned.DAQ_4.alignment       % alignment metadata
 Use:
 
 ```matlab
-disp(aligned.alignmentOverview)
+disp(aligned.alignmentSummaryDisplayTable)
 ```
 
 Important columns:
@@ -190,7 +192,23 @@ Important columns:
 - `TriggerChannel`
 - `TriggerTime_source_s`
 - `AppliedShift_s`
+- `TriggerVoltageAtOriginalZeroTime_V`
+- `TriggerVoltageAtAlignedZeroTime_V`
 - `Status`
 
 This table documents exactly which channel defined the time shift for each
-stream and run.
+DAQ and run.
+
+`TriggerVoltageAtOriginalZeroTime_V` is the independent check: it evaluates
+the trigger voltage at the original time vector zero before any shift is
+applied.
+
+`TriggerVoltageAtAlignedZeroTime_V` evaluates the trigger voltage at the final
+aligned zero time. For DAQs shifted by this helper, this value should be close
+to `TriggerZeroThreshold_V` by construction.
+
+The full numeric table is also preserved:
+
+```matlab
+aligned.alignmentOverview
+```

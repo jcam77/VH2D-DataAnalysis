@@ -10,9 +10,9 @@ Input:
 
 ```matlab
 aligned = AuxFcn_AlignVH2DTimeVectors_001(converted, ...
-    TriggerThreshold_V=4, ...
-    ReferenceStreams="DAQ_1", ...
-    AlignStreams=["DAQ_2_3","DAQ_4"]);
+    TriggerZeroThreshold_V=4, ...
+    DAQsAlreadyAligned=strings(0,1), ...
+    DAQsToAlign=["DAQ_1","DAQ_2_3","DAQ_4"]);
 ```
 
 Offset correction:
@@ -20,6 +20,14 @@ Offset correction:
 ```matlab
 offsetCorrected = AuxFcn_RemoveVH2DPressureOffset_001(aligned, ...
     BaselineWindow_s=[-0.050, -0.005]);
+```
+
+For lower memory use in report scripts:
+
+```matlab
+offsetCorrected = AuxFcn_RemoveVH2DPressureOffset_001(aligned, ...
+    BaselineWindow_s=[-0.050, -0.005], ...
+    KeepSourceSignal=false);
 ```
 
 ## Method
@@ -71,10 +79,19 @@ The input `aligned` structure remains unchanged.
 Each corrected stream stores:
 
 ```matlab
-runOffset.DAQ_4.source_signal      % signal before offset correction
 runOffset.DAQ_4.signal             % offset-corrected signal
 runOffset.DAQ_4.offsetCorrection   % per-channel correction table
 ```
+
+If `KeepSourceSignal=true`, each corrected stream also stores:
+
+```matlab
+runOffset.DAQ_4.source_signal      % signal before offset correction
+```
+
+For large DAQ matrices, `KeepSourceSignal=false` is recommended after the
+workflow has been verified because it avoids keeping a second copy of every
+large signal matrix.
 
 The campaign-level overview is:
 

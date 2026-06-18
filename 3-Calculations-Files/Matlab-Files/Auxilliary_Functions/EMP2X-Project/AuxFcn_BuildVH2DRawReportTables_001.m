@@ -13,9 +13,11 @@ end
 rawOverviewTable = AuxFcn_BuildVH2DRawOverviewTable_001(campaign, metadata);
 
 reportTables = struct();
+% Compact raw-data loading status: one row per run and DAQ/sensor system.
 reportTables.rawLoadStatus = localRawLoadStatusTable(rawOverviewTable);
 reportTables.rawLoadStatusDisplay = localAddRunSeparatorRows( ...
     reportTables.rawLoadStatus);
+% Metadata-derived tables: select only the fields useful in the DPP report.
 reportTables.runPlan = localSelectTableColumns(metadata.experimentPlanTable, [ ...
     "RunId", "TargetH2_vol_pct", "Ignition", "Vent", ...
     "MFCFlow_slpm", "RecircStopToIgnition_s"]);
@@ -34,7 +36,9 @@ sensorMappingTable = localAddLoadedDataChannels( ...
 %     "MeasuredQuantity", "X_m", "Y_m", "Z_m", "Sensitivity", ...
 %     "SensitivityUnit"]);
 reportTables.sensorMap = localSelectTableColumns(sensorMappingTable, [ ...
-    "GroupId", "DaqSystem", "DaqChannel", "SensorId", "LocationLabel","IsBlindSensor", "LoadedDataChannel", ...
+    "GroupId", "DaqSystem", "DaqChannel", "SensorId", "LocationLabel", ...
+    "IsBlindSensor", "IsTriggerChannel", "IsActive", ...
+    "MountingMethod", "Notes", "LoadedDataChannel", ...
     "LoadedDataColumn", "LoadedDataMatch", ...
     "MeasuredQuantity", "Sensitivity", ...
     "SensitivityUnit"]);
@@ -48,42 +52,44 @@ reportTables.runNotes = reportTables.groupAndRunNotes(:, ...
 end
 
 function tbl = localRawLoadStatusTable(rawOverviewTable)
-streamPrefixes = ["DAQ_1", "DAQ_2_3", "DAQ_4", "H2BGA", ...
+% Convert the wide raw overview table into a long table sorted by run. This
+% makes it easier to see, for each run, which DAQs/sensors loaded correctly.
+daqPrefixes = ["DAQ_1", "DAQ_2_3", "DAQ_4", "H2BGA", ...
     "HS_D_2", "HS_D_3"];
 fallbackPrefixes = ["", "DAQ_2", "", "", "", ""];
-daqSystems = ["DAQ_1", "DAQ_2_3", "DAQ_4", "H2BGA", ...
+daqNames = ["DAQ_1", "DAQ_2_3", "DAQ_4", "H2BGA", ...
     "HS_D_2", "HS_D_3"];
 
 tbl = table();
-for iPrefix = 1:numel(streamPrefixes)
-    streamPrefix = localResolveOverviewPrefix(rawOverviewTable, ...
-        streamPrefixes(iPrefix), fallbackPrefixes(iPrefix));
+for iPrefix = 1:numel(daqPrefixes)
+    daqPrefix = localResolveOverviewPrefix(rawOverviewTable, ...
+        daqPrefixes(iPrefix), fallbackPrefixes(iPrefix));
     nRows = height(rawOverviewTable);
-    DAQ_System = repmat(daqSystems(iPrefix), nRows, 1);
-    streamTable = table(rawOverviewTable.RunId, ...
-        DAQ_System, ...
-        localGetNumericColumn(rawOverviewTable, streamPrefix + "_Samples"), ...
-        localGetNumericColumn(rawOverviewTable, streamPrefix + "_Channels"), ...
-        localGetNumericColumn(rawOverviewTable, streamPrefix + "_Fs_Hz"), ...
-        localGetStringColumn(rawOverviewTable, streamPrefix + "_Status"), ...
-        'VariableNames', {'RunId','DAQ_System','Samples','Channels','Fs_Hz','Status'});
-    tbl = [tbl; streamTable]; %#ok<AGROW>
+    DAQs = repmat(daqNames(iPrefix), nRows, 1);
+    daqTable = table(rawOverviewTable.RunId, ...
+        DAQs, ...
+        localGetNumericColumn(rawOverviewTable, daqPrefix + "_Samples"), ...
+        localGetNumericColumn(rawOverviewTable, daqPrefix + "_Channels"), ...
+        localGetNumericColumn(rawOverviewTable, daqPrefix + "_Fs_Hz"), ...
+        localGetStringColumn(rawOverviewTable, daqPrefix + "_Status"), ...
+        'VariableNames', {'RunId','DAQs','Samples','Channels','Fs_Hz','Status'});
+    tbl = [tbl; daqTable]; %#ok<AGROW>
 end
 
-tbl = sortrows(tbl, {'RunId','DAQ_System'});
+tbl = sortrows(tbl, {'RunId','DAQs'});
 
 end
 
-function streamPrefix = localResolveOverviewPrefix(tbl, preferredPrefix, fallbackPrefix)
-streamPrefix = string(preferredPrefix);
-if ismember(char(streamPrefix + "_Samples"), tbl.Properties.VariableNames)
+function daqPrefix = localResolveOverviewPrefix(tbl, preferredPrefix, fallbackPrefix)
+daqPrefix = string(preferredPrefix);
+if ismember(char(daqPrefix + "_Samples"), tbl.Properties.VariableNames)
     return
 end
 
 fallbackPrefix = string(fallbackPrefix);
 if strlength(fallbackPrefix) > 0 && ...
         ismember(char(fallbackPrefix + "_Samples"), tbl.Properties.VariableNames)
-    streamPrefix = fallbackPrefix;
+    daqPrefix = fallbackPrefix;
 end
 end
 
@@ -105,12 +111,12 @@ end
 function displayTbl = localStringDisplayTable(tbl)
 displayTbl = table( ...
     string(tbl.RunId), ...
-    string(tbl.DAQ_System), ...
+    string(tbl.DAQs), ...
     string(tbl.Samples), ...
     string(tbl.Channels), ...
     string(tbl.Fs_Hz), ...
     string(tbl.Status), ...
-    'VariableNames', {'RunId','DAQ_System','Samples','Channels','Fs_Hz','Status'});
+    'VariableNames', {'RunId','DAQs','Samples','Channels','Fs_Hz','Status'});
 end
 
 function sensorMap = localAddLoadedDataChannels(sensorMap, campaign)
@@ -118,6 +124,8 @@ if isempty(sensorMap) || ~isfield(campaign, 'groups') || isempty(campaign.groups
     return
 end
 
+% Add loaded-channel evidence from the raw data next to each metadata mapping
+% row. This supports traceability without guessing sensor identity.
 nRows = height(sensorMap);
 LoadedDataChannel = strings(nRows, 1);
 LoadedDataColumn = strings(nRows, 1);
@@ -152,7 +160,7 @@ end
 
 function loaded = localLoadedChannelsForMapping(campaign, groupId, daqSystem)
 loaded = table(strings(0,1), strings(0,1), zeros(0,1), strings(0,1), ...
-    'VariableNames', {'RunId','Stream','Column','Channel'});
+    'VariableNames', {'RunId','DAQs','Column','Channel'});
 
 groupFields = string(fieldnames(campaign.groups));
 groupIds = strings(numel(groupFields), 1);
@@ -171,32 +179,32 @@ if ~isfield(groupData, 'runs') || isempty(groupData.runs)
     return
 end
 
-streamFields = localStreamFieldsForDaqSystem(daqSystem);
+daqFields = localDAQFieldsForDaqSystem(daqSystem);
 runFields = string(fieldnames(groupData.runs));
 for iRun = 1:numel(runFields)
     runData = groupData.runs.(runFields(iRun));
     runId = localGetStringField(runData, 'id', runFields(iRun));
 
-    for iStream = 1:numel(streamFields)
-        streamField = streamFields(iStream);
-        if ~isfield(runData, streamField)
+    for iDAQ = 1:numel(daqFields)
+        daqField = daqFields(iDAQ);
+        if ~isfield(runData, daqField)
             continue
         end
 
-        streamData = runData.(streamField);
-        if ~isstruct(streamData) || ~isfield(streamData, 'channels') || ...
-                isempty(streamData.channels)
+        daqData = runData.(daqField);
+        if ~isstruct(daqData) || ~isfield(daqData, 'channels') || ...
+                isempty(daqData.channels)
             continue
         end
 
-        channels = string(streamData.channels(:));
+        channels = string(daqData.channels(:));
         nChannels = numel(channels);
         loaded = [loaded; table( ...
             repmat(string(runId), nChannels, 1), ...
-            repmat(string(streamField), nChannels, 1), ...
+            repmat(string(daqField), nChannels, 1), ...
             (1:nChannels)', ...
             channels, ...
-            'VariableNames', {'RunId','Stream','Column','Channel'})]; %#ok<AGROW>
+            'VariableNames', {'RunId','DAQs','Column','Channel'})]; %#ok<AGROW>
     end
 end
 end
@@ -283,19 +291,19 @@ match.Column = strjoin(columnPairs, "; ");
 match.Evidence = string(evidence);
 end
 
-function streamFields = localStreamFieldsForDaqSystem(daqSystem)
+function daqFields = localDAQFieldsForDaqSystem(daqSystem)
 daqSystem = localNormalizeDaqSystem(daqSystem);
 switch daqSystem
     case "DAQ-1"
-        streamFields = ["DAQ_1"];
+        daqFields = ["DAQ_1"];
     case "DAQ-2"
-        streamFields = ["DAQ_2", "DAQ_2_3"];
+        daqFields = ["DAQ_2", "DAQ_2_3"];
     case "DAQ-3"
-        streamFields = ["DAQ_3", "DAQ_2_3"];
+        daqFields = ["DAQ_3", "DAQ_2_3"];
     case "DAQ-4"
-        streamFields = ["DAQ_4"];
+        daqFields = ["DAQ_4"];
     otherwise
-        streamFields = strings(0,1);
+        daqFields = strings(0,1);
 end
 end
 
@@ -327,7 +335,7 @@ end
 function row = localSeparatorRow(nVariables)
 separator = repmat("----------------", 1, nVariables);
 row = array2table(separator, ...
-    'VariableNames', {'RunId','DAQ_System','Samples','Channels','Fs_Hz','Status'});
+    'VariableNames', {'RunId','DAQs','Samples','Channels','Fs_Hz','Status'});
 end
 
 function notesTbl = localGroupAndRunNotesTable(rawOverviewTable, metadata)

@@ -68,9 +68,13 @@ end
 
 streamSpecs = options.StreamSpecs;
 if isempty(streamSpecs)
+    % Default layout for current VH2D raw data. Users can override this when
+    % a future campaign changes DAQ folders, file names, or formats.
     streamSpecs = localDefaultVH2DStreamSpecs();
 end
 
+% Keep project paths centralized here so report scripts can call the loader
+% without hardcoding raw/converted folders.
 auxRoot = fullfile(projectRoot, ...
     "3-Calculations-Files", "Matlab-Files", "Auxilliary_Functions");
 rawRoot = fullfile(projectRoot, "2-Data", "RawData", rawFolderName);
@@ -83,6 +87,8 @@ campaignField = matlab.lang.makeValidName(campaignName);
 campaignMatFile = fullfile(convertedCampaignRoot, ...
     campaignName + "_Groups_" + strjoin(string(selectedGroups), "_") + ".mat");
 
+% Fast path: if the selected campaign/group cache is compatible, load it
+% instead of reading the large raw files again.
 if options.UseCachedMat && isfile(campaignMatFile)
     cachedData = load(campaignMatFile);
     cachedCacheInfo = localCacheInfoFromCache(cachedData, campaignField);
@@ -110,11 +116,15 @@ readerMap = localReaderMap(options.MF4Reader);
 disp("Reader dispatch map:");
 disp(readerMap);
 
+% Preserve any campaigns already in memory, then add/replace only the
+% requested campaign field.
 campaigns = options.ExistingCampaigns;
 campaigns.(campaignField).id = campaignName;
 campaigns.(campaignField).groups = struct();
 
 for iGroup = 1:numel(selectedGroups)
+    % Each group is loaded independently so bad/unneeded groups can be
+    % excluded from the call site.
     groupId = string(selectedGroups(iGroup));
     groupField = options.GroupFieldPrefix + groupId;
 
@@ -150,6 +160,8 @@ if options.SaveCampaignMat
         mkdir(convertedCampaignRoot);
     end
 
+    % Save campaign-named variables, e.g. VH2D_Wk22 and
+    % VH2D_Wk22_cacheInfo, to avoid overwriting other campaigns on load().
     cacheInfo = struct();
     cacheInfo.version = options.CacheVersion;
     cacheInfo.createdAt = datetime("now");

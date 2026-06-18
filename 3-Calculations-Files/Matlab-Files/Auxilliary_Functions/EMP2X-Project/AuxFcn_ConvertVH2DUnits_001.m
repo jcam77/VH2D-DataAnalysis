@@ -3,9 +3,9 @@ function converted = AuxFcn_ConvertVH2DUnits_001(campaign)
 % Build a unit-converted VH2D campaign structure without modifying raw data.
 %
 % The returned structure mirrors campaign.groups.<group>.runs.<run>, but each
-% stream contains converted signals and a conversion table. Conversion is based
+% DAQ contains converted signals and a conversion table. Conversion is based
 % on explicit unit labels from the loaded raw data, channel-name unit labels
-% such as "[bar]", and known stream-level units for H2BGA. It does not use
+% such as "[bar]", and known DAQ-level units for H2BGA. It does not use
 % channel positions.
 
 arguments
@@ -27,6 +27,8 @@ end
 
 groupFields = string(fieldnames(campaign.groups));
 for iGroup = 1:numel(groupFields)
+    % Preserve the original campaign hierarchy: group -> run -> DAQ.
+    % Only the signal units are changed.
     groupField = groupFields(iGroup);
     groupData = campaign.groups.(groupField);
 
@@ -48,19 +50,19 @@ for iGroup = 1:numel(groupFields)
         convertedRun = struct();
         convertedRun.id = runId;
 
-        streamFields = string(fieldnames(runData));
-        streamFields = streamFields(streamFields ~= "id");
-        for iStream = 1:numel(streamFields)
-            streamField = streamFields(iStream);
-            streamData = runData.(streamField);
-            if ~isstruct(streamData)
+        daqFields = string(fieldnames(runData));
+        daqFields = daqFields(daqFields ~= "id");
+        for iDAQ = 1:numel(daqFields)
+            daqField = daqFields(iDAQ);
+            daqData = runData.(daqField);
+            if ~isstruct(daqData)
                 continue
             end
 
-            [convertedValue, streamOverview] = localConvertValue( ...
-                streamData, converted.groups.(groupField).id, runId, streamField);
-            convertedRun.(streamField) = convertedValue;
-            groupOverview = localAppendTable(groupOverview, streamOverview);
+            [convertedValue, daqOverview] = localConvertValue( ...
+                daqData, converted.groups.(groupField).id, runId, daqField);
+            convertedRun.(daqField) = convertedValue;
+            groupOverview = localAppendTable(groupOverview, daqOverview);
         end
 
         converted.groups.(groupField).runs.(runField) = convertedRun;
@@ -73,12 +75,14 @@ end
 converted.overview = overview;
 end
 
-function [convertedValue, overview] = localConvertValue(value, groupId, runId, streamPath)
+function [convertedValue, overview] = localConvertValue(value, groupId, runId, daqPath)
 overview = table();
 convertedValue = struct();
 
+% A DAQ leaf is identified by the presence of `signal`. Nested containers
+% such as Hydrogen_Sensors are traversed until their signal leaves are found.
 if isfield(value, "signal")
-    [convertedValue, overview] = localConvertStream(value, groupId, runId, streamPath);
+    [convertedValue, overview] = localConvertDAQ(value, groupId, runId, daqPath);
     return
 end
 
@@ -92,31 +96,31 @@ for iField = 1:numel(nestedFields)
     end
 
     [convertedNested, nestedOverview] = localConvertValue( ...
-        nestedValue, groupId, runId, streamPath + "." + nestedField);
+        nestedValue, groupId, runId, daqPath + "." + nestedField);
     convertedValue.(nestedField) = convertedNested;
     overview = localAppendTable(overview, nestedOverview);
 end
 end
 
-function [convertedStream, overview] = localConvertStream(streamData, groupId, runId, streamField)
-convertedStream = struct();
-convertedStream.t_s = localGetTimeVector(streamData);
-convertedStream.signal = [];
-convertedStream.channels = localGetChannels(streamData);
-convertedStream.units = strings(1, 0);
-convertedStream.sourceUnits = strings(1, 0);
-convertedStream.conversion = table();
+function [convertedDAQ, overview] = localConvertDAQ(daqData, groupId, runId, daqField)
+convertedDAQ = struct();
+convertedDAQ.t_s = localGetTimeVector(daqData);
+convertedDAQ.signal = [];
+convertedDAQ.channels = localGetChannels(daqData);
+convertedDAQ.units = strings(1, 0);
+convertedDAQ.sourceUnits = strings(1, 0);
+convertedDAQ.conversion = table();
 
 overview = table();
 
-if ~isfield(streamData, "signal") || isempty(streamData.signal)
+if ~isfield(daqData, "signal") || isempty(daqData.signal)
     return
 end
 
-signal = double(streamData.signal);
+signal = double(daqData.signal);
 nChannels = size(signal, 2);
-channels = localPadStringRow(convertedStream.channels, nChannels, "Channel_" + string(1:nChannels));
-rawUnits = localPadStringRow(localGetUnits(streamData), nChannels, repmat("raw", 1, nChannels));
+channels = localPadStringRow(convertedDAQ.channels, nChannels, "Channel_" + string(1:nChannels));
+rawUnits = localPadStringRow(localGetUnits(daqData), nChannels, repmat("raw", 1, nChannels));
 sourceUnits = strings(1, nChannels);
 sourceUnitEvidence = strings(1, nChannels);
 
@@ -127,24 +131,28 @@ offset = zeros(1, nChannels);
 status = strings(1, nChannels);
 rule = strings(1, nChannels);
 
+%%%%%%%%%%%%%%%%%%---Units Conversion---%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 for iChannel = 1:nChannels
+    % Resolve the source unit from evidence first, then apply a transparent
+    % scalar conversion. Channel order is not used to decide the unit.
     [sourceUnits(iChannel), sourceUnitEvidence(iChannel)] = localResolveSourceUnit( ...
-        rawUnits(iChannel), channels(iChannel), streamField);
+        rawUnits(iChannel), channels(iChannel), daqField);
     [factor(iChannel), offset(iChannel), targetUnits(iChannel), ...
         status(iChannel), rule(iChannel)] = localConversionRule(sourceUnits(iChannel));
     convertedSignal(:, iChannel) = signal(:, iChannel) .* factor(iChannel) + offset(iChannel);
 end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-convertedStream.signal = convertedSignal;
-convertedStream.channels = channels;
-convertedStream.units = targetUnits;
-convertedStream.sourceUnits = sourceUnits;
-convertedStream.rawUnits = rawUnits;
-convertedStream.sourceUnitEvidence = sourceUnitEvidence;
-convertedStream.conversion = table( ...
+convertedDAQ.signal = convertedSignal;
+convertedDAQ.channels = channels;
+convertedDAQ.units = targetUnits;
+convertedDAQ.sourceUnits = sourceUnits;
+convertedDAQ.rawUnits = rawUnits;
+convertedDAQ.sourceUnitEvidence = sourceUnitEvidence;
+convertedDAQ.conversion = table( ...
     repmat(string(groupId), nChannels, 1), ...
     repmat(string(runId), nChannels, 1), ...
-    repmat(string(streamField), nChannels, 1), ...
+    repmat(string(daqField), nChannels, 1), ...
     (1:nChannels)', ...
     channels(:), ...
     rawUnits(:), ...
@@ -155,23 +163,25 @@ convertedStream.conversion = table( ...
     offset(:), ...
     status(:), ...
     rule(:), ...
-    'VariableNames', {'GroupId','RunId','Stream','Column','Channel', ...
+    'VariableNames', {'GroupId','RunId','DAQs','Column','Channel', ...
     'RawUnit','SourceUnit','SourceUnitEvidence','TargetUnit','Factor', ...
     'Offset','Status','Rule'});
 
-overview = convertedStream.conversion;
+overview = convertedDAQ.conversion;
 end
 
-function [sourceUnit, evidence] = localResolveSourceUnit(rawUnit, channelName, streamField)
+function [sourceUnit, evidence] = localResolveSourceUnit(rawUnit, channelName, daqField)
 rawUnit = string(rawUnit);
 sourceUnit = strtrim(rawUnit);
 evidence = "reader_unit";
 
+% Reader-provided units are the strongest evidence and are used directly.
 unitKey = lower(strtrim(sourceUnit));
 if strlength(unitKey) > 0 && unitKey ~= "raw"
     return
 end
 
+% Some MF4 channels expose units in the channel name, e.g. "[bar]".
 channelUnit = localExtractBracketUnit(channelName);
 if strlength(channelUnit) > 0
     sourceUnit = channelUnit;
@@ -179,12 +189,14 @@ if strlength(channelUnit) > 0
     return
 end
 
-streamKey = lower(strrep(string(streamField), ".", "_"));
+daqKey = lower(strrep(string(daqField), ".", "_"));
 channelKey = lower(string(channelName));
-if contains(streamKey, "h2bga")
+% If the file does not expose units, record the assumption in the evidence
+% column instead of silently converting.
+if contains(daqKey, "h2bga")
     sourceUnit = "ppm";
     evidence = "H2BGA_raw_assumed_ppm";
-elseif startsWith(streamKey, "daq")
+elseif startsWith(daqKey, "daq")
     if contains(channelKey, "trigger") || contains(channelKey, "voltage")
         sourceUnit = "V";
         evidence = "DAQ_raw_trigger_assumed_V";
@@ -267,28 +279,28 @@ switch unitKey
 end
 end
 
-function t = localGetTimeVector(streamData)
-if isfield(streamData, "t") && ~isempty(streamData.t)
-    t = streamData.t;
+function t = localGetTimeVector(daqData)
+if isfield(daqData, "t") && ~isempty(daqData.t)
+    t = daqData.t;
 else
     t = [];
 end
 end
 
-function channels = localGetChannels(streamData)
-if isfield(streamData, "channels") && ~isempty(streamData.channels)
-    channels = string(streamData.channels);
-elseif isfield(streamData, "channelNames") && ~isempty(streamData.channelNames)
-    channels = string(streamData.channelNames);
+function channels = localGetChannels(daqData)
+if isfield(daqData, "channels") && ~isempty(daqData.channels)
+    channels = string(daqData.channels);
+elseif isfield(daqData, "channelNames") && ~isempty(daqData.channelNames)
+    channels = string(daqData.channelNames);
 else
     channels = strings(1, 0);
 end
 channels = reshape(channels, 1, []);
 end
 
-function units = localGetUnits(streamData)
-if isfield(streamData, "units") && ~isempty(streamData.units)
-    units = string(streamData.units);
+function units = localGetUnits(daqData)
+if isfield(daqData, "units") && ~isempty(daqData.units)
+    units = string(daqData.units);
 else
     units = strings(1, 0);
 end

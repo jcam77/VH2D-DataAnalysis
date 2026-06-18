@@ -2,19 +2,21 @@ function aligned = AuxFcn_AlignVH2DTimeVectors_001(converted, options)
 % AuxFcn_AlignVH2DTimeVectors_001
 % Build a trigger-aligned VH2D campaign structure without modifying input data.
 %
-% DAQ_1 is treated as already zero-aligned by default. DAQ_2_3 and DAQ_4
-% are shifted so the first 4 V trigger crossing becomes t = 0 s.
+% DAQs listed in DAQsAlreadyAligned are kept unchanged. DAQs listed in
+% DAQsToAlign are shifted so the first trigger threshold crossing becomes
+% t = 0 s.
 
 arguments
     converted (1,1) struct
-    options.TriggerThreshold_V (1,1) double = 4
-    options.ReferenceStreams string = "DAQ_1"
-    options.AlignStreams string = ["DAQ_2_3", "DAQ_4", "DAQ_2", "DAQ_3"]
+    options.TriggerZeroThreshold_V (1,1) double = NaN
+    options.DAQsAlreadyAligned string = strings(0,1)
+    options.DAQsToAlign string = strings(0,1)
 end
 
+localValidateOptions(options);
 aligned = converted;
 aligned.source = "AuxFcn_AlignVH2DTimeVectors_001";
-aligned.rule = "DAQ_1 kept unchanged; configured DAQ streams shifted to first 4 V trigger crossing.";
+aligned.rule = "DAQsAlreadyAligned kept unchanged; DAQsToAlign shifted to first trigger threshold crossing.";
 if isfield(converted, "overview")
     aligned.conversionOverview = converted.overview;
 end
@@ -23,11 +25,14 @@ overview = table();
 
 if ~isfield(aligned, "groups") || isempty(aligned.groups)
     aligned.alignmentOverview = overview;
+    aligned.alignmentSummaryDisplayTable = overview;
     return
 end
 
 groupFields = string(fieldnames(aligned.groups));
 for iGroup = 1:numel(groupFields)
+    % Keep the same group/run/DAQ hierarchy. Alignment only changes time
+    % vectors, never the measured signal values.
     groupField = groupFields(iGroup);
     groupData = aligned.groups.(groupField);
     groupId = localGetStringField(groupData, "id", groupField);
@@ -44,18 +49,18 @@ for iGroup = 1:numel(groupFields)
         runData = groupData.runs.(runField);
         runId = localGetStringField(runData, "id", runField);
 
-        streamFields = string(fieldnames(runData));
-        streamFields = streamFields(streamFields ~= "id");
-        for iStream = 1:numel(streamFields)
-            streamField = streamFields(iStream);
-            value = runData.(streamField);
+        daqFields = string(fieldnames(runData));
+        daqFields = daqFields(daqFields ~= "id");
+        for iDAQ = 1:numel(daqFields)
+            daqField = daqFields(iDAQ);
+            value = runData.(daqField);
             if ~isstruct(value)
                 continue
             end
 
             [alignedValue, rows] = localAlignValue( ...
-                value, groupId, runId, streamField, options);
-            aligned.groups.(groupField).runs.(runField).(streamField) = alignedValue;
+                value, groupId, runId, daqField, options);
+            aligned.groups.(groupField).runs.(runField).(daqField) = alignedValue;
             groupOverview = localAppendTable(groupOverview, rows);
         end
     end
@@ -65,14 +70,17 @@ for iGroup = 1:numel(groupFields)
 end
 
 aligned.alignmentOverview = overview;
+aligned.alignmentSummaryDisplayTable = localBuildAlignmentSummaryDisplayTable( ...
+    overview, [options.DAQsAlreadyAligned(:); options.DAQsToAlign(:)]);
 end
 
-function [alignedValue, overview] = localAlignValue(value, groupId, runId, streamPath, options)
+function [alignedValue, overview] = localAlignValue(value, groupId, runId, daqPath, options)
 overview = table();
 alignedValue = value;
 
+% DAQ leaves contain `signal`; nested containers are recursively inspected.
 if isfield(value, "signal")
-    [alignedValue, overview] = localAlignStream(value, groupId, runId, streamPath, options);
+    [alignedValue, overview] = localAlignDAQ(value, groupId, runId, daqPath, options);
     return
 end
 
@@ -85,36 +93,45 @@ for iField = 1:numel(nestedFields)
     end
 
     [alignedNested, nestedOverview] = localAlignValue( ...
-        nestedValue, groupId, runId, streamPath + "." + nestedField, options);
+        nestedValue, groupId, runId, daqPath + "." + nestedField, options);
     alignedValue.(nestedField) = alignedNested;
     overview = localAppendTable(overview, nestedOverview);
 end
 end
 
-function [alignedStream, overview] = localAlignStream(streamData, groupId, runId, streamPath, options)
-alignedStream = streamData;
+function [alignedDAQ, overview] = localAlignDAQ(daqData, groupId, runId, daqPath, options)
+alignedDAQ = daqData;
 overview = table();
 
-if ~isfield(streamData, "t_s") || isempty(streamData.t_s) || ...
-        ~isfield(streamData, "signal") || isempty(streamData.signal)
+if ~isfield(daqData, "t_s") || isempty(daqData.t_s) || ...
+        ~isfield(daqData, "signal") || isempty(daqData.signal)
     return
 end
 
-t = streamData.t_s(:);
-rootStream = localRootStream(streamPath);
-isReference = any(rootStream == options.ReferenceStreams);
-shouldAlign = any(rootStream == options.AlignStreams);
+t = daqData.t_s(:);
+rootDAQs = localRootDAQs(daqPath);
+isAlreadyAligned = any(rootDAQs == options.DAQsAlreadyAligned);
+shouldAlign = any(rootDAQs == options.DAQsToAlign);
 
-[triggerColumn, triggerChannel, triggerStatus] = localFindTriggerChannel(streamData);
+% Streams outside the configured pressure/trigger DAQ list are copied
+% exactly as they came in. This prevents concentration streams such as H2BGA
+% and HS from receiving misleading alignment metadata.
+if ~isAlreadyAligned && ~shouldAlign
+    return
+end
+
+% Trigger channel detection uses channel names and units, not a fixed column
+% number, because DAQ channel order can change between runs.
+[triggerColumn, triggerChannel, triggerStatus] = localFindTriggerChannel(daqData);
 [triggerTime, crossingStatus] = localFindTriggerCrossing( ...
-    t, streamData.signal, triggerColumn, options.TriggerThreshold_V);
+    t, daqData.signal, triggerColumn, options.TriggerZeroThreshold_V);
 
-if isReference
+if isAlreadyAligned
     appliedShift = 0;
-    status = "reference_kept";
+    status = "already_aligned_kept";
 elseif shouldAlign && ~isnan(triggerTime)
     appliedShift = triggerTime;
-    alignedStream.t_s = t - appliedShift;
+    alignedDAQ.t_s = t - appliedShift;
     status = "aligned_to_trigger";
 elseif shouldAlign
     appliedShift = NaN;
@@ -124,47 +141,66 @@ else
     status = "copied_not_trigger_aligned";
 end
 
-alignedStream.source_t_s = t;
-alignedStream.alignment = struct( ...
-    "triggerThreshold_V", options.TriggerThreshold_V, ...
+% Report-facing evidence check. This shows what the DAQ trigger voltage was
+% at the original logger zero time before any shift is applied.
+triggerVoltageAtOriginalZeroTime = localEvaluateTriggerVoltageAtTime( ...
+    t, daqData.signal, triggerColumn, 0);
+triggerVoltageErrorAtOriginalZeroTime = triggerVoltageAtOriginalZeroTime - ...
+    options.TriggerZeroThreshold_V;
+triggerVoltageAtAlignedZeroTime = localEvaluateTriggerVoltageAtTime( ...
+    t, daqData.signal, triggerColumn, appliedShift);
+
+alignedDAQ.source_t_s = t;
+alignedDAQ.alignment = struct( ...
+    "triggerZeroThreshold_V", options.TriggerZeroThreshold_V, ...
     "triggerColumn", triggerColumn, ...
     "triggerChannel", triggerChannel, ...
     "triggerTime_source_s", triggerTime, ...
     "appliedShift_s", appliedShift, ...
+    "triggerVoltageAtOriginalZeroTime_V", triggerVoltageAtOriginalZeroTime, ...
+    "triggerVoltageErrorAtOriginalZeroTime_V", triggerVoltageErrorAtOriginalZeroTime, ...
+    "triggerVoltageAtAlignedZeroTime_V", triggerVoltageAtAlignedZeroTime, ...
     "status", status);
 
 overview = table( ...
     string(groupId), ...
     string(runId), ...
-    string(streamPath), ...
-    rootStream, ...
+    string(daqPath), ...
+    rootDAQs, ...
     triggerColumn, ...
     triggerChannel, ...
-    options.TriggerThreshold_V, ...
+    options.TriggerZeroThreshold_V, ...
     triggerTime, ...
     appliedShift, ...
+    triggerVoltageAtOriginalZeroTime, ...
+    triggerVoltageErrorAtOriginalZeroTime, ...
+    triggerVoltageAtAlignedZeroTime, ...
     triggerStatus, ...
     crossingStatus, ...
     status, ...
-    'VariableNames', {'GroupId','RunId','Stream','RootStream', ...
-    'TriggerColumn','TriggerChannel','TriggerThreshold_V', ...
-    'TriggerTime_source_s','AppliedShift_s','TriggerChannelStatus', ...
+    'VariableNames', {'GroupId','RunId','DAQs','RootDAQs', ...
+    'TriggerColumn','TriggerChannel','TriggerZeroThreshold_V', ...
+    'TriggerTime_source_s','AppliedShift_s', ...
+    'TriggerVoltageAtOriginalZeroTime_V', ...
+    'TriggerVoltageErrorAtOriginalZeroTime_V', ...
+    'TriggerVoltageAtAlignedZeroTime_V', ...
+    'TriggerChannelStatus', ...
     'CrossingStatus','Status'});
 end
 
-function [triggerColumn, triggerChannel, status] = localFindTriggerChannel(streamData)
+function [triggerColumn, triggerChannel, status] = localFindTriggerChannel(daqData)
 triggerColumn = NaN;
 triggerChannel = "";
 status = "missing_trigger_channel";
 
-if ~isfield(streamData, "signal") || isempty(streamData.signal)
+if ~isfield(daqData, "signal") || isempty(daqData.signal)
     return
 end
 
-nChannels = size(streamData.signal, 2);
-channels = localPadStringRow(localGetStringRow(streamData, "channels"), ...
+nChannels = size(daqData.signal, 2);
+channels = localPadStringRow(localGetStringRow(daqData, "channels"), ...
     nChannels, "Channel_" + string(1:nChannels));
-units = localPadStringRow(localGetStringRow(streamData, "units"), ...
+units = localPadStringRow(localGetStringRow(daqData, "units"), ...
     nChannels, repmat("raw", 1, nChannels));
 
 channelKey = lower(channels);
@@ -229,9 +265,67 @@ else
 end
 end
 
-function rootStream = localRootStream(streamPath)
-parts = split(string(streamPath), ".");
-rootStream = parts(1);
+function voltage = localEvaluateTriggerVoltageAtTime(t, signal, triggerColumn, queryTime)
+voltage = NaN;
+
+if isnan(queryTime) || isnan(triggerColumn) || ...
+        triggerColumn < 1 || triggerColumn > size(signal, 2)
+    return
+end
+
+y = signal(:, triggerColumn);
+valid = isfinite(t) & isfinite(y);
+t = t(valid);
+y = y(valid);
+
+if numel(t) < 2
+    return
+end
+
+[t, uniqueIdx] = unique(t, "stable");
+y = y(uniqueIdx);
+voltage = interp1(t, y, queryTime, "linear", NaN);
+end
+
+function rootDAQs = localRootDAQs(daqPath)
+parts = split(string(daqPath), ".");
+rootDAQs = parts(1);
+end
+
+function displayTable = localBuildAlignmentSummaryDisplayTable(overview, daqsToShow)
+if isempty(overview)
+    displayTable = overview;
+    return
+end
+
+summaryTable = overview( ...
+    ismember(overview.RootDAQs, string(daqsToShow)), ...
+    {'GroupId','RunId','DAQs','TriggerColumn','TriggerChannel', ...
+    'TriggerTime_source_s','AppliedShift_s', ...
+    'TriggerVoltageAtOriginalZeroTime_V', ...
+    'TriggerVoltageAtAlignedZeroTime_V','Status'});
+
+displayTable = summaryTable;
+displayTable.TriggerTime_source_s = ...
+    compose("%.9g", summaryTable.TriggerTime_source_s);
+displayTable.AppliedShift_s = ...
+    compose("%.9g", summaryTable.AppliedShift_s);
+displayTable.TriggerVoltageAtOriginalZeroTime_V = ...
+    compose("%.4f", summaryTable.TriggerVoltageAtOriginalZeroTime_V);
+displayTable.TriggerVoltageAtAlignedZeroTime_V = ...
+    compose("%.4f", summaryTable.TriggerVoltageAtAlignedZeroTime_V);
+end
+
+function localValidateOptions(options)
+if isnan(options.TriggerZeroThreshold_V)
+    error("AuxFcn_AlignVH2DTimeVectors_001:MissingTriggerThreshold", ...
+        "TriggerZeroThreshold_V must be provided explicitly, for example TriggerZeroThreshold_V=4.");
+end
+
+if isempty(options.DAQsToAlign) || all(strlength(options.DAQsToAlign) == 0)
+    error("AuxFcn_AlignVH2DTimeVectors_001:MissingDAQsToAlign", ...
+        "DAQsToAlign must be provided explicitly, for example DAQsToAlign=[""DAQ_2_3"",""DAQ_4""].");
+end
 end
 
 function values = localGetStringRow(s, fieldName)

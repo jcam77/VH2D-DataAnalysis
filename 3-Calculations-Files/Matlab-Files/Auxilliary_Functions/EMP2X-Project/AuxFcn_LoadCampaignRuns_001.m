@@ -64,6 +64,8 @@ end
 rootDir = char(rootDir);
 assert(isfolder(rootDir), 'Campaign root directory not found: %s', rootDir);
 
+% Discover run folders from the campaign root, then filter by selected group
+% IDs and optional run numbers.
 groupsWanted = string(options.Groups);
 runNumbersWanted = options.RunNumbers;
 runDirs = dir(fullfile(rootDir, options.RunPattern));
@@ -85,6 +87,8 @@ campaign.runs = repmat(localEmptyRun(), numel(runRecords), 1);
 manifest = localEmptyManifest();
 
 for i = 1:numel(runRecords)
+    % Each run folder is inspected independently. Missing DAQ/sensor folders
+    % simply produce no stream for that run.
     runPath = fullfile(rootDir, runRecords(i).folderName);
     streamSpecs = localDiscoverStreams(runPath, options.StreamSpecs);
 
@@ -109,6 +113,8 @@ for i = 1:numel(runRecords)
             loadError = "Skipped by SkipFormats option.";
         elseif options.LoadData
             try
+                % Reader dispatch is based only on the configured file format,
+                % not on folder names or channel positions.
                 data = localLoadStream(spec, options);
                 loaded = ~isempty(data);
                 if loaded
@@ -189,6 +195,9 @@ streamSpecs = localEmptyStreamSpec();
 streamSpecs(:) = [];
 
 for i = 1:numel(requestedSpecs)
+    % StreamSpecs is the user-editable contract between folder layout and
+    % reader format. This keeps campaign-specific folder names out of the
+    % reader functions.
     requested = requestedSpecs(i);
     sensorPath = fullfile(runPath, requested.folder);
     if ~isfolder(sensorPath)

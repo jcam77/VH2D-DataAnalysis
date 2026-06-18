@@ -61,7 +61,7 @@ The function converts from explicit evidence:
 - reader-provided raw units, when available
 - MF4/asammdf units exported by `AuxPy_ConvertMF4_ASAMMDF_001.py`
 - unit labels embedded in raw channel names, e.g. `DAQ-2-Channel1 [bar]`
-- known stream-level units for `H2BGA`, where raw CSV values are treated as `ppm`
+- known DAQ-level units for `H2BGA`, where raw CSV values are treated as `ppm`
 
 Current conversion rules:
 
@@ -79,10 +79,10 @@ Unknown units are copied unchanged and flagged in:
 converted.overview
 ```
 
-## Stream Notes
+## DAQs Notes
 
 - DAQ pressure channels are converted to `kPa` when their source unit is pressure.
-- If MF4/asammdf does not expose units for a DAQ stream, raw pressure channels are assumed `bar` and trigger/voltage channels are assumed `V`; this assumption is recorded in `SourceUnitEvidence`.
+- If MF4/asammdf does not expose units for a DAQ, raw pressure channels are assumed `bar` and trigger/voltage channels are assumed `V`; this assumption is recorded in `SourceUnitEvidence`.
 - Trigger channels remain in `V`.
 - `H2BGA` means Hydrogen Binary Gas Analyser measurements; raw H2BGA values are converted from `ppm` to `vol.%`.
 - `HS` means Hydrogen Sensors; their `%` output is numerically copied unchanged and labeled as `vol.%`.

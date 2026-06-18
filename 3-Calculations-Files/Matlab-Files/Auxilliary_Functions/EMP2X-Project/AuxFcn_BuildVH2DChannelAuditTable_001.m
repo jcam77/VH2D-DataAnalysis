@@ -5,14 +5,14 @@ function [channelAuditTable, channelAuditSummaryTable, channelAuditWarningTable]
 %
 % This function does not infer sensor identity from channel names. It only
 % reports:
-%   - loaded stream/channel information from the data file
+%   - loaded DAQ/channel information from the data file
 %   - expected DAQ/sensor/channel information from sensors_mapping.json
 %   - whether a loaded channel name changes column across runs
 
 arguments
     campaign (1,1) struct
     metadata (1,1) struct
-    options.StreamFields string = ["DAQ_1", "DAQ_2_3", "DAQ_4"]
+    options.DAQs string = ["DAQ_1", "DAQ_2_3", "DAQ_4"]
 end
 
 sensorMap = table();
@@ -23,7 +23,7 @@ end
 GroupId = strings(0,1);
 RunId = strings(0,1);
 RunField = strings(0,1);
-LoadedStream = strings(0,1);
+LoadedDAQs = strings(0,1);
 LoadedField = strings(0,1);
 Column = zeros(0,1);
 LoadedChannelName = strings(0,1);
@@ -41,6 +41,8 @@ else
 end
 
 for iGroup = 1:numel(groupFields)
+    % Audit one group/run at a time so every result row can be traced back
+    % directly to the campaign folder hierarchy.
     groupData = campaign.groups.(groupFields(iGroup));
     if ~isfield(groupData, 'runs')
         continue
@@ -52,26 +54,29 @@ for iGroup = 1:numel(groupFields)
         runData = groupData.runs.(runFields(iRun));
         runId = localGetStringField(runData, 'id', runFields(iRun));
 
-        for iStream = 1:numel(options.StreamFields)
-            requestedStream = string(options.StreamFields(iStream));
-            loadedField = localResolveRunStreamField(runData, requestedStream);
-            loadedStream = requestedStream;
+        for iDAQ = 1:numel(options.DAQs)
+            requestedDAQs = string(options.DAQs(iDAQ));
+            loadedField = localResolveRunDAQField(runData, requestedDAQs);
+            loadedDAQs = requestedDAQs;
             if strlength(loadedField) == 0
                 continue
             end
 
-            streamData = runData.(loadedField);
-            if ~isfield(streamData, 'channels') || isempty(streamData.channels)
+            daqData = runData.(loadedField);
+            if ~isfield(daqData, 'channels') || isempty(daqData.channels)
                 continue
             end
 
-            expected = localExpectedMetadata(sensorMap, groupId, loadedStream);
-            loadedChannels = string(streamData.channels(:));
+            expected = localExpectedMetadata(sensorMap, groupId, loadedDAQs);
+            loadedChannels = string(daqData.channels(:));
             for iChannel = 1:numel(loadedChannels)
+                % No sensor identity is inferred here. The loaded channel
+                % is recorded next to the expected metadata for transparent
+                % manual verification.
                 GroupId(end+1,1) = groupId; %#ok<AGROW>
                 RunId(end+1,1) = runId; %#ok<AGROW>
                 RunField(end+1,1) = runFields(iRun); %#ok<AGROW>
-                LoadedStream(end+1,1) = loadedStream; %#ok<AGROW>
+                LoadedDAQs(end+1,1) = loadedDAQs; %#ok<AGROW>
                 LoadedField(end+1,1) = loadedField; %#ok<AGROW>
                 Column(end+1,1) = iChannel; %#ok<AGROW>
                 LoadedChannelName(end+1,1) = loadedChannels(iChannel); %#ok<AGROW>
@@ -86,13 +91,13 @@ for iGroup = 1:numel(groupFields)
     end
 end
 
-channelAuditTable = table(GroupId, RunId, RunField, LoadedStream, ...
+channelAuditTable = table(GroupId, RunId, RunField, LoadedDAQs, ...
     LoadedField, Column, LoadedChannelName, ExpectedMappedDaqSystems, ...
     ExpectedSensorIds, ExpectedDaqChannels, ExpectedLocationLabels, ...
     ExpectedMountingMethods, ExpectedMeasuredQuantities);
 channelAuditTable = localAddColumnConsistencyStatus(channelAuditTable);
 channelAuditTable = sortrows(channelAuditTable, ...
-    {'GroupId', 'RunId', 'LoadedStream', 'Column'});
+    {'GroupId', 'RunId', 'LoadedDAQs', 'Column'});
 
 [channelAuditSummaryTable, channelAuditWarningTable] = ...
     localBuildReportTables(channelAuditTable);
@@ -107,17 +112,17 @@ else
 end
 end
 
-function expected = localExpectedMetadata(sensorMap, groupId, loadedStream)
+function expected = localExpectedMetadata(sensorMap, groupId, loadedDAQs)
 expected = localEmptyExpectedMetadata();
 if isempty(sensorMap)
     return
 end
 
 groupKey = localNormalizeId(groupId);
-streamKey = localNormalizeDaqSystem(loadedStream);
+daqKey = localNormalizeDaqSystem(loadedDAQs);
 mapGroup = localNormalizeId(string(sensorMap.GroupId));
 mapDaq = localNormalizeDaqSystem(string(sensorMap.DaqSystem));
-rowMask = mapGroup == groupKey & localDaqMatchesStream(mapDaq, streamKey);
+rowMask = mapGroup == groupKey & localDaqMatchesDAQs(mapDaq, daqKey);
 idx = find(rowMask);
 if isempty(idx)
     return
@@ -146,7 +151,7 @@ ColumnConsistencyStatus = repmat("single_or_consistent_column", height(tbl), 1);
 
 for iRow = 1:height(tbl)
     sameChannelRows = tbl.GroupId == tbl.GroupId(iRow) & ...
-        tbl.LoadedStream == tbl.LoadedStream(iRow) & ...
+        tbl.LoadedDAQs == tbl.LoadedDAQs(iRow) & ...
         tbl.LoadedChannelName == tbl.LoadedChannelName(iRow);
 
     if numel(unique(tbl.Column(sameChannelRows))) > 1
@@ -168,7 +173,7 @@ auditTable.HasAuditWarning = ...
     startsWith(auditTable.ColumnConsistencyStatus, "WARNING");
 
 summaryTable = groupsummary(auditTable, ...
-    ["GroupId","LoadedStream"], "sum", "HasAuditWarning");
+    ["GroupId","LoadedDAQs"], "sum", "HasAuditWarning");
 summaryTable.Properties.VariableNames{ ...
     strcmp(summaryTable.Properties.VariableNames, ...
     'GroupCount')} = 'LoadedChannels';
@@ -179,7 +184,7 @@ summaryTable = localAddMetadataToSummary(summaryTable, auditTable);
 
 warningTable = auditTable(auditTable.HasAuditWarning, :);
 warningTable = warningTable(:, ...
-    {'GroupId','RunId','LoadedStream','Column','LoadedChannelName', ...
+    {'GroupId','RunId','LoadedDAQs','Column','LoadedChannelName', ...
     'ExpectedMappedDaqSystems','ExpectedSensorIds','ExpectedDaqChannels', ...
     'ExpectedLocationLabels','ExpectedMountingMethods', ...
     'ColumnConsistencyStatus'});
@@ -196,7 +201,7 @@ ExpectedMeasuredQuantities = strings(height(summaryTable), 1);
 
 for iRow = 1:height(summaryTable)
     rowMask = auditTable.GroupId == summaryTable.GroupId(iRow) & ...
-        auditTable.LoadedStream == summaryTable.LoadedStream(iRow);
+        auditTable.LoadedDAQs == summaryTable.LoadedDAQs(iRow);
     rows = auditTable(rowMask, :);
 
     LoadedChannelNames(iRow) = localJoinUnique(rows.LoadedChannelName);
@@ -250,37 +255,39 @@ value = upper(strtrim(string(value)));
 value = replace(value, "_", "-");
 end
 
-function streamField = localResolveRunStreamField(runData, requestedStream)
-requestedStream = string(requestedStream);
-aliases = localStreamFieldAliases(requestedStream);
-streamField = "";
+function daqField = localResolveRunDAQField(runData, requestedDAQs)
+requestedDAQs = string(requestedDAQs);
+aliases = localDAQFieldAliases(requestedDAQs);
+daqField = "";
 
 for iAlias = 1:numel(aliases)
     if isfield(runData, aliases(iAlias))
-        streamField = aliases(iAlias);
+        daqField = aliases(iAlias);
         return
     end
 end
 end
 
-function aliases = localStreamFieldAliases(streamField)
-streamField = string(streamField);
-switch streamField
+function aliases = localDAQFieldAliases(daqField)
+daqField = string(daqField);
+switch daqField
     case "DAQ_2"
         aliases = ["DAQ_2", "DAQ_2_3"];
     case "DAQ_2_3"
         aliases = ["DAQ_2_3", "DAQ_2"];
     otherwise
-        aliases = streamField;
+        aliases = daqField;
 end
 end
 
-function tf = localDaqMatchesStream(mapDaq, streamKey)
+function tf = localDaqMatchesDAQs(mapDaq, daqKey)
 mapDaq = localNormalizeDaqSystem(mapDaq);
-streamKey = localNormalizeDaqSystem(streamKey);
-tf = mapDaq == streamKey;
+daqKey = localNormalizeDaqSystem(daqKey);
+tf = mapDaq == daqKey;
 
-if streamKey == "DAQ-2" || streamKey == "DAQ-2-3"
+% The data file for DAQ-2 and DAQ-3 can be loaded as one combined DAQ_2_3
+% structure, while the metadata lists physical DAQ-2 and DAQ-3 separately.
+if daqKey == "DAQ-2" || daqKey == "DAQ-2-3"
     tf = tf | mapDaq == "DAQ-2" | mapDaq == "DAQ-3";
 end
 end

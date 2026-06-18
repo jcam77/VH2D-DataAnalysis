@@ -2,8 +2,10 @@ function groupData = AuxFcn_LoadCampaignGroup_001(rootDir, groupId, options)
 % AuxFcn_LoadCampaignGroup_001
 % Load one campaign group into a clean, config-driven hierarchy.
 %
-% The function does not assume specific stream names such as DAQ_1, H2CM, or
-% Hydrogen_Sensors. The output structure follows StreamSpecs.
+% Here "stream" means one raw data source inside a run folder, e.g. one DAQ
+% file, one H2BGA file, or one hydrogen sensor file. The function does not
+% assume specific names such as DAQ_1, H2BGA, or HS. The output structure
+% follows StreamSpecs.
 %
 % Optional StreamSpecs fields used by this wrapper:
 %   outputPath             : dot path for loaded data, e.g. "DAQ_1" or
@@ -47,6 +49,7 @@ arguments
     options.OutputDir (1,1) string = ""
 end
 
+% First load the selected raw runs into a flat run/stream representation.
 campaign = AuxFcn_LoadCampaignRuns_001(rootDir, ...
     Groups=groupId, ...
     RunPattern=options.RunPattern, ...
@@ -76,6 +79,8 @@ for iRun = 1:numel(campaign.runs)
     runOut = localEmptyRun();
     runOut.id = campaignRun.id;
 
+    % Then place each loaded source into the user-facing hierarchy requested
+    % by StreamSpecs.outputPath, e.g. DAQ_1 or HS.D_2.
     for iStream = 1:numel(campaignRun.streams)
         stream = campaignRun.streams(iStream);
         outputPath = localOutputPath(stream.id, options.StreamSpecs);
@@ -90,6 +95,8 @@ end
 groupData.overview = localBuildOverview(campaign.runs, options.StreamSpecs);
 
 if options.SaveMat
+    % Optional group-level cache. The main campaign loader normally writes
+    % one campaign-level MAT file instead.
     outputDir = options.OutputDir;
     if strlength(outputDir) == 0
         outputDir = fullfile(fileparts(fileparts(string(rootDir))), "ConvertedData");

@@ -46,6 +46,8 @@ originalLineNumbers = originalLineNumbers(keepLine);
 assert(numel(allLines) >= 4, ...
     'Hydrogen sensor TXT file "%s" has too few lines.', fileNameStr);
 
+% Some files contain an earlier accidental logging session before the real
+% test. Search for the data header instead of assuming it is always line 3.
 headerLineIdx = localFindDataHeaderLine(allLines, delim);
 metadataKeyLineIdx = max(1, headerLineIdx - 2);
 metadataValLineIdx = max(1, headerLineIdx - 1);
