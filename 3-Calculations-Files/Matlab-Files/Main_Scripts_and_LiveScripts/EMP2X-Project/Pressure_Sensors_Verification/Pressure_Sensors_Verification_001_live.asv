@@ -1,0 +1,69 @@
+%[text] # **Vented Hydrogen Deflagration Experiments**
+%[text] %[text:anchor:T_D5D49718] # Pressure Sensors Verification (PSV)
+%[text] ## Objectives
+%[text] The objective of this analysis is to verify the pressure-sensor response over the operating range relevant to the vented hydrogen deflagration experiments. The original calibration certificates cover larger pressure ranges, whereas the measured peak overpressure in the experiments are expected to remain within the lower part of the sensor range. Therefore, an additional operating-range verification is performed over ($&dollar&;0 \\text{--} 0.5\\ \\mathrm{bar}&dollar&;$). **The main objectives are, Linearity,  Hysteresis and Repeatability Estimation of the piezoelectric pressure sensors.**
+%[text] **Note:** This verification is not intended to replace the original calibration certificate or to define a new accredited sensor sensitivity. The certificate sensitivity is retained. The verification is used to quantify the behaviour of the measurement chain within the pressure range relevant to the experiments and to support the uncertainty budget for peak overpressure measurements.
+%[text] ## 1. Linearity Estimation
+%[text] The pressure sensors non-linearity (at operating-range) is evaluated from the measurements verification data as the maximum absolute deviation between the observed pressure response and a least-squares best-fit straight line (BFSL) over the 0–0.5 bar verification range. The result are reported as a percentage of the verification full-scale range, $&dollar&;(FS\_{\\mathrm{ver}} = 0.5\\ \\mathrm{bar})&dollar&;. $
+%[text] The result is reported as a percentage of the verification full-scale range:
+%[text] $&dollar&;&dollar&;\nFS\_{\\mathrm{verif}} = 0.5\~\\mathrm{bar}\n&dollar&;&dollar&;\n\nThe residual at each verification point is defined as:\n\n&dollar&;&dollar&;\nr\_i = P\_{\\mathrm{obs},i} - P\_{\\mathrm{fit},i}\n&dollar&;&dollar&;\n\nThe maximum departure from the fitted line is:\n\n&dollar&;&dollar&;\n\\delta\_{\\mathrm{Lin}} = \\max\_i |r\_i|\n&dollar&;&dollar&;\n\nThe operating-range non-linearity, reported as a percentage of the verification full scale, is:\n&dollar&;&dollar&;\nLin\_{\\% FS} =\\frac{\\delta\_{\\mathrm{Lin}}}{FS\_{\\mathrm{verif}}}\\times 100\n&dollar&;&dollar&;\n\nThe corresponding standard uncertainty is obtained by treating the maximum departure as a bounded systematic effect with a rectangular distribution:\n&dollar&;&dollar&;\nu\_{Lin} =\\frac{\\delta\_{\\mathrm{lin}}}{\\sqrt{3}}\n&dollar&;&dollar&;$
+%[text] **Note:** Following the NIST gauge-study approach \[1\] for non-linearity, this maximum departure was treated as a bounded systematic effect and converted to a standard uncertainty by assuming a rectangular distribution. The residual standard error of the fitted line was also calculated as a diagnostic measure of scatter around the fit but was not used as the primary linearity uncertainty component.
+%[text] ## 2. Hysteresis Estimation
+%[text] Quantify the difference between increasing-pressure and decreasing-pressure readings at the same nominal pressure level. Hysteresis is estimated separately from non-linearity because it represents path-dependent behaviour of the sensor response.
+%[text] $&dollar&;&dollar&;\nh\_i = P\_{\\mathrm{up},i} - P\_{\\mathrm{down},i}\n&dollar&;&dollar&;\n&dollar&;&dollar&;\n\\delta\_{\\mathrm{Hys}} = \\max\_i |h\_i|\n&dollar&;&dollar&;\nIf included as a standard uncertainty component, the bounded hysteresis contribution can be estimated as:\n&dollar&;&dollar&;\nu\_{Hys} = \\frac{\\delta\_{\\mathrm{Hys}}}{\\sqrt{3}}\n&dollar&;&dollar&;$
+%[text] ## 3. Repeatability Estimation
+%[text] Repeatability is estimation from repeated measurements performed at selected pressure levels under nominally identical conditions. For a given pressure level (k), with ($n\_k$) repeated readings ($P\_{k,j}$), the mean pressure is calculated as:
+%[text] $&dollar&;&dollar&;\n\\bar{P}\_k = \n\\frac{1}{n\_k}\n\\sum\_{j=1}^{n\_k} P\_{k,j}\n&dollar&;&dollar&;$
+%[text] The experimental standard deviation of the repeated readings is:
+%[text] $&dollar&;&dollar&;\nsd\_{\\mathrm{rep},k} =\n\\sqrt{\n\\frac{1}{n\_k-1}\n\\sum\_{j=1}^{n\_k}\n\\left(P\_{k,j}-\\bar{P}\_k\\right)^2\n}\n&dollar&;&dollar&;$
+%[text] If the mean value ($\\bar{P}\_k$) is used as the reported value at that pressure level, the Type A standard uncertainty of the mean is:
+%[text] $u\_{\\mathrm{rep,norm},k} = \\frac{s\_{\\mathrm{rep},k}}{\\sqrt{n\_k}}\n$
+%[text] **Note: Conservative Approach** (assumed uniform distribution)
+%[text] As an alternative, when the number of repeated measurements is small and a bounded rectangular (uniform distribution) model is preferred, the repeatability contribution can be estimated from the observed range:
+%[text] $&dollar&;&dollar&;\nu\_{\\mathrm{rep,unif},k} = \n\\frac{P\_{\\max,k}-P\_{\\min,k}}{2\\sqrt{3}}\n&dollar&;&dollar&;$
+%[text] The selected repeatability contribution method should be stated explicitly. 
+%%
+%[text] # **Data Preparation (DPR)**
+%[text] %[text:anchor:H_23C559C1] ## 1. Setup (Matlab Startup File)
+%[text] %[text:anchor:H_1B29D089] This m-File code prepare the environment to provide access to auxiliary files and sub-folders.
+clear ; clc; close all;
+format short eng
+scriptRoot = fileparts(mfilename("fullpath"));
+[projectRoot,AuxFcn_GS] = AuxFcn_Matlab_Startup_File_001;
+auxRoot = fullfile(projectRoot, ...
+    "3-Calculations-Files", "Matlab-Files", "Auxilliary_Functions");
+mainFcnRoot = fullfile(projectRoot, ...
+    "3-Calculations-Files", "Matlab-Files", "Main_Functions");
+addpath(genpath(auxRoot));
+addpath(genpath(mainFcnRoot));
+set(groot, 'defaultTextInterpreter', 'latex', 'defaultAxesTickLabelInterpreter','latex', 'defaultLegendInterpreter','latex');
+%%
+%[text] ## **2. Load & Overview of Raw Data Verification**
+%[text] #### **2.1 Load Raw Data Verification**
+%[text] #### Verification Campaign: PSV-G01-01
+%[text] PSV-G01-01
+%[text] One-Time-Run to Generate File Structure of the Verification Campaign
+% campaigns = MainFcn_Load_VH2D_RawCampaign_001("VH2D_Wk22", ["02","03","04"]);
+%[text] Load Group Raw Data
+% campaignMatFile = fullfile(projectRoot, ...
+%     "2-Data", "ConvertedData", "VH2D-Wk22", ...
+%     "VH2D_Wk22_Groups_02_03_04.mat");
+% load(campaignMatFile)
+% campaign = VH2D_Wk22;
+%%
+%[text] ## **3. Exploratory Data Analysis (EDA)**
+%[text] ### Time Domain Analysis (EDA-TDA)
+%[text] Pressure $\\Delta\_p$ extraction
+
+%%
+%[text] ## References
+%[text] \[1\] *NIST/SEMATECH e-Handbook of Statistical Methods*, http://www.itl.nist.gov/div898/handbook/, "2.4.6.Quantifying uncertainties from a gauge study" link: [https://www.itl.nist.gov/div898/handbook/mpc/section4/mpc46.htm](https://www.itl.nist.gov/div898/handbook/mpc/section4/mpc46.htm)
+%[text] \[2\] Euramet e.V. Guidelines on the calibration of electromechanical manometers, cg 17, v2.0 (2011).
+%[text] 
+%[text] 
+
+%[appendix]{"version":"1.0"}
+%---
+%[metadata:view]
+%   data: {"layout":"onright","rightPanelPercent":13.5}
+%---
